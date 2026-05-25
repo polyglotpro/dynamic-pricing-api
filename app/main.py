@@ -18,7 +18,7 @@ app = FastAPI(title="Joint Pricing and Advertising Agent Demo", version="2.0")
 _default_allowed_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://dynamic-pricing-engine-gamma.vercel.app",
+    "https://dynamic-pricing-frontend-seven.vercel.app/",
 ]
 _env_allowed = os.getenv("ALLOWED_ORIGINS", "").strip()
 if _env_allowed:

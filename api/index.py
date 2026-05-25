@@ -1,18 +1,11 @@
 import os
 
-from fastapi.middleware.cors import CORSMiddleware
-
 # Reuse the existing FastAPI app (keeps all business routes unchanged).
+# NOTE: CORS is configured in `app/main.py`. We intentionally do NOT re-add a
+# second CORSMiddleware here because it can produce invalid CORS headers
+# (especially when `allow_credentials=True`) and cause browsers to surface a
+# generic "Failed to fetch" error.
 from app.main import app  # noqa: E402
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # temporary for testing
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.get("/")
