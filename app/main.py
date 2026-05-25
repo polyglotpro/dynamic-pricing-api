@@ -847,8 +847,6 @@ async def upload_test(file: UploadFile = File(...)):
         headers = {
             "Authorization": f"Bearer {blob_token}",
             "Content-Type": "text/csv",
-            "x-add-random-suffix": "0",
-            "x-access": "private",
         }
 
         async with httpx.AsyncClient(timeout=60) as client:
