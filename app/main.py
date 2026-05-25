@@ -804,8 +804,14 @@ async def upload_catalog(file: UploadFile = File(...)):
 
 @app.post("/upload-test")
 async def upload_test(file: UploadFile = File(...)):
+    content = await file.read()
+    decoded_content = content.decode("utf-8-sig")
+    df = pd.read_csv(io.StringIO(decoded_content))
+
     return {
-        "filename": file.filename
+        "filename": file.filename,
+        "rows": len(df),
+        "columns": list(df.columns)
     }
 
 @app.get("/simulation/scenarios")
