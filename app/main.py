@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import asyncio
 import csv, io, os, json, shutil, pandas as pd, time, math
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 from .config import CONFIG, save_config, reset_config_to_defaults
 from .simulation.experiment_runner import run_comparison, run_single_simulation
