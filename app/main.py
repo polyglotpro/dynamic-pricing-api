@@ -806,6 +806,10 @@ async def upload_catalog(file: UploadFile = File(...)):
 @app.post("/upload-test")
 async def upload_test(file: UploadFile = File(...)):
     try:
+        # ------------------------------------------------------------------
+        # ENV CHECK
+        # ------------------------------------------------------------------
+
         blob_token = os.getenv("BLOB_READ_WRITE_TOKEN")
 
         if not blob_token:
@@ -814,49 +818,106 @@ async def upload_test(file: UploadFile = File(...)):
                 detail="Missing BLOB_READ_WRITE_TOKEN environment variable"
             )
 
-        safe_filename = os.path.basename(file.filename or "uploaded_catalog.csv")
+        # ------------------------------------------------------------------
+        # READ FILE
+        # ------------------------------------------------------------------
+
+        safe_filename = os.path.basename(
+            file.filename or "uploaded_catalog.csv"
+        )
 
         content = await file.read()
+
         decoded_content = content.decode("utf-8-sig")
 
         df = pd.read_csv(io.StringIO(decoded_content))
 
+        # ------------------------------------------------------------------
+        # COLUMN TRANSFORMATIONS
+        # ------------------------------------------------------------------
+
         rename_map = {}
 
-        if "cost_of_goods_sold" in df.columns and "cogs" not in df.columns:
+        if (
+            "cost_of_goods_sold" in df.columns
+            and "cogs" not in df.columns
+        ):
             rename_map["cost_of_goods_sold"] = "cogs"
 
-        if "sell_through_rate_weekly" in df.columns and "sell_through_weekly_pct" not in df.columns:
-            rename_map["sell_through_rate_weekly"] = "sell_through_weekly_pct"
+        if (
+            "sell_through_rate_weekly" in df.columns
+            and "sell_through_weekly_pct" not in df.columns
+        ):
+            rename_map[
+                "sell_through_rate_weekly"
+            ] = "sell_through_weekly_pct"
 
-        if "roas_30d" in df.columns and "roas" not in df.columns:
+        if (
+            "roas_30d" in df.columns
+            and "roas" not in df.columns
+        ):
             rename_map["roas_30d"] = "roas"
 
         if rename_map:
             df = df.rename(columns=rename_map)
 
+        # ------------------------------------------------------------------
+        # CONVERT BACK TO CSV IN MEMORY
+        # ------------------------------------------------------------------
+
         output_buffer = io.StringIO()
+
         df.to_csv(output_buffer, index=False)
+
         transformed_csv_bytes = output_buffer.getvalue().encode("utf-8")
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        blob_path = f"uploads/test/{timestamp}_{safe_filename}"
+        # ------------------------------------------------------------------
+        # BUILD BLOB PATH
+        # ------------------------------------------------------------------
 
-        upload_url = f"https://blob.vercel-storage.com/{blob_path}"
+        timestamp = datetime.now(timezone.utc).strftime(
+            "%Y%m%dT%H%M%SZ"
+        )
+
+        blob_path = (
+            f"uploads/test/{timestamp}_{safe_filename}"
+        )
+
+        # ------------------------------------------------------------------
+        # UPLOAD TO VERCEL BLOB
+        # ------------------------------------------------------------------
 
         headers = {
-            "Authorization": f"Bearer {blob_token}",
-            "Content-Type": "text/csv",
+            "Authorization": f"Bearer {blob_token}"
+        }
+
+        files = {
+            "file": (
+                blob_path,
+                transformed_csv_bytes,
+                "text/csv"
+            )
+        }
+
+        data = {
+            "pathname": blob_path
         }
 
         async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.put(
-                upload_url,
+
+            response = await client.post(
+                "https://blob.vercel-storage.com",
                 headers=headers,
-                content=transformed_csv_bytes,
+                data=data,
+                files=files,
             )
 
+        # ------------------------------------------------------------------
+        # HANDLE UPLOAD FAILURE
+        # ------------------------------------------------------------------
+
         if response.status_code not in [200, 201]:
+
             raise HTTPException(
                 status_code=500,
                 detail={
@@ -868,8 +929,15 @@ async def upload_test(file: UploadFile = File(...)):
 
         blob_result = response.json()
 
+        # ------------------------------------------------------------------
+        # SUCCESS RESPONSE
+        # ------------------------------------------------------------------
+
         return {
-            "message": "Upload parsed, transformed, and saved to Vercel Blob successfully",
+            "message": (
+                "Upload parsed, transformed, "
+                "and saved to Vercel Blob successfully"
+            ),
             "filename": safe_filename,
             "rows": len(df),
             "columns": list(df.columns),
@@ -881,9 +949,14 @@ async def upload_test(file: UploadFile = File(...)):
         raise
 
     except Exception as e:
-        print("UPLOAD TEST BLOB ERROR:", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
 
+        print("UPLOAD TEST BLOB ERROR:", str(e))
+
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+    )
+        
 @app.get("/simulation/scenarios")
 def get_scenarios():
     """Returns a list of available simulation scenarios."""
