@@ -916,18 +916,18 @@ async def upload_test(file: UploadFile = File(...)):
         # HANDLE UPLOAD FAILURE
         # ------------------------------------------------------------------
 
-        if response.status_code not in [200, 201]:
+        # if response.status_code not in [200, 201]:
 
-            raise HTTPException(
-                status_code=500,
-                detail={
-                    "message": "Vercel Blob upload failed",
-                    "status_code": response.status_code,
-                    "response": response.text,
-                },
-            )
+        #     raise HTTPException(
+        #         status_code=500,
+        #         detail={
+        #             "message": "Vercel Blob upload failed",
+        #             "status_code": response.status_code,
+        #             "response": response.text,
+        #         },
+        #     )
 
-        blob_result = response.json()
+        # blob_result = response.json()
 
         # ------------------------------------------------------------------
         # SUCCESS RESPONSE
