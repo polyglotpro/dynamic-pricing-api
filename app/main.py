@@ -846,11 +846,14 @@ async def upload_catalog(file: UploadFile = File(...)):
 
                 csv_bytes = output_buffer.getvalue().encode("utf-8")
 
+                # blob_path = (
+                #     f"data/{folder}/"
+                #     f"{brand_prefix}_{folder}.csv"
+                # )
                 blob_path = (
                     f"data/{folder}/"
-                    f"{brand_prefix}_{folder}.csv"
+                    f"{brand_prefix}_{folder}_{timestamp}.csv"
                 )
-
                 async with AsyncBlobClient() as blob_client:
 
                     blob = await blob_client.put(
