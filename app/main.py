@@ -9,6 +9,7 @@ import hashlib
 from .config import CONFIG, save_config, reset_config_to_defaults
 from .simulation.experiment_runner import run_comparison, run_single_simulation
 from .simulation.scenario_library import SCENARIOS
+from vercel.blob import AsyncBlobClient
 
 app = FastAPI(title="Joint Pricing and Advertising Agent Demo", version="2.0")
 
@@ -805,10 +806,11 @@ async def upload_catalog(file: UploadFile = File(...)):
 @app.post("/upload-test")
 async def upload_test(file: UploadFile = File(...)):
     try:
-        safe_filename = os.path.basename(file.filename)
+        safe_filename = os.path.basename(file.filename or "uploaded_catalog.csv")
 
         content = await file.read()
         decoded_content = content.decode("utf-8-sig")
+
         df = pd.read_csv(io.StringIO(decoded_content))
 
         rename_map = {}
@@ -825,16 +827,37 @@ async def upload_test(file: UploadFile = File(...)):
         if rename_map:
             df = df.rename(columns=rename_map)
 
+        # Save transformed CSV to memory, not local filesystem
+        output_buffer = io.StringIO()
+        df.to_csv(output_buffer, index=False)
+        transformed_csv_bytes = output_buffer.getvalue().encode("utf-8")
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        blob_path = f"uploads/test/{timestamp}_{safe_filename}"
+
+        client = AsyncBlobClient()
+
+        blob = await client.put(
+            blob_path,
+            transformed_csv_bytes,
+            access="private",
+            add_random_suffix=False,
+        )
+
         return {
-            "message": "Upload parsed and transformed successfully",
+            "message": "Upload parsed, transformed, and saved to Vercel Blob successfully",
             "filename": safe_filename,
             "rows": len(df),
             "columns": list(df.columns),
             "rename_map": rename_map,
+            "blob": {
+                "pathname": blob.pathname,
+                "url": blob.url,
+            },
         }
 
     except Exception as e:
-        print("UPLOAD TEST ERROR:", str(e))
+        print("UPLOAD TEST BLOB ERROR:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/simulation/scenarios")
