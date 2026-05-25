@@ -832,77 +832,47 @@ async def upload_catalog(file: UploadFile = File(...)):
 
         uploaded_blobs = {}
 
-        async def split_and_upload(columns, folder):
+        async def split_and_save(columns, folder, brand_prefix):
+
             target_cols = [c for c in columns if c in df.columns]
 
-            if len(target_cols) <= 1:
-                return None
+            if len(target_cols) > 1:
 
-            sub_df = df[target_cols]
+                sub_df = df[target_cols]
 
-            output_buffer = io.StringIO()
-            sub_df.to_csv(output_buffer, index=False)
-            csv_bytes = output_buffer.getvalue().encode("utf-8")
+                output_buffer = io.StringIO()
 
-            blob_path = f"data/{folder}/{brand}_{folder}.csv"
+                sub_df.to_csv(output_buffer, index=False)
 
-            async with AsyncBlobClient() as blob_client:
-                blob = await blob_client.put(
-                    blob_path,
-                    csv_bytes,
-                    access="private",
-                    content_type="text/csv",
-                    add_random_suffix=False,
+                csv_bytes = output_buffer.getvalue().encode("utf-8")
+
+                blob_path = (
+                    f"data/{folder}/"
+                    f"{brand_prefix}_{folder}.csv"
                 )
 
-            return {
-                "folder": folder,
-                "rows": len(sub_df),
-                "columns": list(sub_df.columns),
-                "pathname": blob.pathname,
-                "url": blob.url,
-            }
+                async with AsyncBlobClient() as blob_client:
 
-        uploaded_blobs["catalog"] = await split_and_upload(catalog_cols, "catalog")
-        uploaded_blobs["inventory"] = await split_and_upload(inventory_cols, "inventory")
-        uploaded_blobs["advertising"] = await split_and_upload(ad_cols, "advertising")
-        uploaded_blobs["pricing"] = await split_and_upload(pricing_cols, "pricing")
+                    blob = await blob_client.put(
+                        blob_path,
+                        csv_bytes,
+                        access="private",
+                        content_type="text/csv",
+                        add_random_suffix=False,
+                    )
 
-        uploaded_blobs = {
-            k: v for k, v in uploaded_blobs.items()
-            if v is not None
-        }
+                print(
+                    f"Uploaded {folder}: "
+                    f"{len(sub_df)} rows -> {blob.pathname}"
+                )
 
-        metadata = {
-            "filename": safe_filename,
-            "brand": brand,
-            "rows": len(df),
-            "uploaded_at": timestamp,
-            "rename_map": rename_map,
-            "domains": uploaded_blobs,
-            "status": "success",
-            "message": (
-                f"Ingested {len(df)} SKUs. Distributed across Catalog, "
-                "Inventory, Ads, and Pricing domains."
-            ),
-        }
-
-        metadata_bytes = json.dumps(metadata, indent=2).encode("utf-8")
-
-        metadata_path = "data/uploads/latest_upload.json"
-
-        async with AsyncBlobClient() as blob_client:
-            metadata_blob = await blob_client.put(
-                metadata_path,
-                metadata_bytes,
-                access="private",
-                content_type="application/json",
-                add_random_suffix=False,
-            )
+        await split_and_save(catalog_cols, "catalog", brand)
+        await split_and_save(inventory_cols, "inventory", brand)
+        await split_and_save(ad_cols, "advertising", brand)
+        await split_and_save(pricing_cols, "pricing", brand)
 
         global CONFIG
-        CONFIG = get_default_config()
-        CONFIG["config_version"] = datetime.now(timezone.utc).isoformat()
+        CONFIG = reset_config_to_defaults()
 
         return {
             "message": "Catalog ingested and partitioned successfully using Vercel Blob",
@@ -910,11 +880,6 @@ async def upload_catalog(file: UploadFile = File(...)):
             "rows": len(df),
             "brand": brand,
             "rename_map": rename_map,
-            "domains": uploaded_blobs,
-            "metadata": {
-                "pathname": metadata_blob.pathname,
-                "url": metadata_blob.url,
-            },
             "config_version": CONFIG.get("config_version"),
         }
 
