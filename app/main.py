@@ -804,27 +804,38 @@ async def upload_catalog(file: UploadFile = File(...)):
 
 @app.post("/upload-test")
 async def upload_test(file: UploadFile = File(...)):
-    content = await file.read()
-    decoded_content = content.decode("utf-8-sig")
-    df = pd.read_csv(io.StringIO(decoded_content))
+    try:
+        safe_filename = os.path.basename(file.filename)
 
-    rename_map = {}
-    if "cost_of_goods_sold" in df.columns and "cogs" not in df.columns:
-        rename_map["cost_of_goods_sold"] = "cogs"
-    if "sell_through_rate_weekly" in df.columns and "sell_through_weekly_pct" not in df.columns:
-        rename_map["sell_through_rate_weekly"] = "sell_through_weekly_pct"
-    if "roas_30d" in df.columns and "roas" not in df.columns:
-        rename_map["roas_30d"] = "roas"
+        content = await file.read()
+        decoded_content = content.decode("utf-8-sig")
+        df = pd.read_csv(io.StringIO(decoded_content))
 
-    if rename_map:
-        df = df.rename(columns=rename_map)
+        rename_map = {}
 
-    return {
-        "filename": file.filename,
-        "rows": len(df),
-        "columns": list(df.columns),
-        "rename_map": rename_map
-    }
+        if "cost_of_goods_sold" in df.columns and "cogs" not in df.columns:
+            rename_map["cost_of_goods_sold"] = "cogs"
+
+        if "sell_through_rate_weekly" in df.columns and "sell_through_weekly_pct" not in df.columns:
+            rename_map["sell_through_rate_weekly"] = "sell_through_weekly_pct"
+
+        if "roas_30d" in df.columns and "roas" not in df.columns:
+            rename_map["roas_30d"] = "roas"
+
+        if rename_map:
+            df = df.rename(columns=rename_map)
+
+        return {
+            "message": "Upload parsed and transformed successfully",
+            "filename": safe_filename,
+            "rows": len(df),
+            "columns": list(df.columns),
+            "rename_map": rename_map,
+        }
+
+    except Exception as e:
+        print("UPLOAD TEST ERROR:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/simulation/scenarios")
 def get_scenarios():
