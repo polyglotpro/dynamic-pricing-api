@@ -781,8 +781,8 @@ async def upload_catalog(file: UploadFile = File(...)):
                     folder,
                     f"{brand_prefix}_{folder}.csv"
                 )
-
-                sub_df.to_csv(path, index=False)
+                print(f"Would save {folder}: {len(sub_df)} rows")
+                #sub_df.to_csv(path, index=False)
 
         brand = "myntra" if "myntra" in safe_filename.lower() else "fabindia" if "fabindia" in safe_filename.lower() else "active"
         
