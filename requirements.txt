@@ -5,3 +5,4 @@ pydantic==2.8.2
 pandas
 numpy
 httpx
+vercel>=0.5.0

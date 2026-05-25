@@ -1,15 +1,16 @@
+import asyncio
+import hashlib
+import httpx
+import csv, io, os, json, shutil, pandas as pd, time, math
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
-import asyncio
-import csv, io, os, json, shutil, pandas as pd, time, math
 from datetime import datetime, timezone
-import hashlib
 from .config import CONFIG, save_config, reset_config_to_defaults
 from .simulation.experiment_runner import run_comparison, run_single_simulation
 from .simulation.scenario_library import SCENARIOS
-import httpx
+from vercel.blob import AsyncBlobClient
 
 app = FastAPI(title="Joint Pricing and Advertising Agent Demo", version="2.0")
 
@@ -903,15 +904,14 @@ async def upload_test(file: UploadFile = File(...)):
             "pathname": blob_path
         }
 
-        async with httpx.AsyncClient(timeout=60) as client:
-
-            response = await client.post(
-                "https://blob.vercel-storage.com",
-                headers=headers,
-                data=data,
-                files=files,
+        async with AsyncBlobClient() as blob_client:
+            blob = await blob_client.put(
+                blob_path,
+                transformed_csv_bytes,
+                access="private",
+                content_type="text/csv",
+                add_random_suffix=False,
             )
-
         # ------------------------------------------------------------------
         # HANDLE UPLOAD FAILURE
         # ------------------------------------------------------------------
@@ -933,6 +933,7 @@ async def upload_test(file: UploadFile = File(...)):
         # SUCCESS RESPONSE
         # ------------------------------------------------------------------
 
+       
         return {
             "message": (
                 "Upload parsed, transformed, "
@@ -942,7 +943,10 @@ async def upload_test(file: UploadFile = File(...)):
             "rows": len(df),
             "columns": list(df.columns),
             "rename_map": rename_map,
-            "blob": blob_result,
+            "blob": {
+                "pathname": blob.pathname,
+                "url": blob.url,
+            },
         }
 
     except HTTPException:
