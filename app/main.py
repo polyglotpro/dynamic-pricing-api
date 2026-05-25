@@ -853,7 +853,6 @@ async def upload_catalog(file: UploadFile = File(...)):
                     access="private",
                     content_type="text/csv",
                     add_random_suffix=False,
-                    allow_overwrite=True,
                 )
 
             return {
@@ -899,7 +898,6 @@ async def upload_catalog(file: UploadFile = File(...)):
                 access="private",
                 content_type="application/json",
                 add_random_suffix=False,
-                allow_overwrite=True,
             )
 
         global CONFIG
