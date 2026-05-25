@@ -701,116 +701,9 @@ async def approve_strategy(data: Dict[str, Any]):
 
 @app.post("/upload-catalog")
 async def upload_catalog(file: UploadFile = File(...)):
-    safe_filename = os.path.basename(file.filename)
-    # Avoid blocking the event loop / worker thread.
-    # await asyncio.sleep(3)
+    safe_filename = os.path.basename(file.filename or "uploaded_catalog.csv")
+
     try:
-        content = await file.read()
-        decoded_content = content.decode("utf-8-sig")
-        df = pd.read_csv(io.StringIO(decoded_content))
-        data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
-
-        # Normalize common template/demo headers into engine-friendly columns.
-        # This prevents ROAS/Conversion missing -> A-03 triggering for every SKU.
-        rename_map = {}
-        if "cost_of_goods_sold" in df.columns and "cogs" not in df.columns:
-            rename_map["cost_of_goods_sold"] = "cogs"
-        if "sell_through_rate_weekly" in df.columns and "sell_through_weekly_pct" not in df.columns:
-            # Template uses a 0..1 fraction; engine supports either and will scale if needed later.
-            rename_map["sell_through_rate_weekly"] = "sell_through_weekly_pct"
-        if "roas_30d" in df.columns and "roas" not in df.columns:
-            rename_map["roas_30d"] = "roas"
-        if rename_map:
-            df = df.rename(columns=rename_map)
-
-        # Provide safe defaults if the uploaded template doesn't include these.
-        if "conversion_rate" not in df.columns:
-            # Deterministic per-SKU variation so AI mode doesn't collapse into one action.
-            def _conv_from_sku(s):
-                h = hashlib.md5(str(s).encode("utf-8")).hexdigest()
-                n = int(h[:8], 16) % 1000
-                return 0.015 + (n / 1000.0) * 0.05  # 0.015..0.065
-            df["conversion_rate"] = df["sku_id"].apply(_conv_from_sku) if "sku_id" in df.columns else 0.03
-        if "ctr" not in df.columns:
-            df["ctr"] = 0.02
-        if "cpc" not in df.columns:
-            df["cpc"] = 10
-        if "last_30d_sales" not in df.columns:
-            df["last_30d_sales"] = 120
-        if "avg_daily_sessions" not in df.columns:
-            df["avg_daily_sessions"] = 500
-        if "conversion_benchmark" not in df.columns:
-            # Benchmark slightly lower than conversion_rate for some SKUs, higher for others.
-            def _bench_from_sku(s):
-                h = hashlib.md5((str(s) + "_bench").encode("utf-8")).hexdigest()
-                n = int(h[:8], 16) % 1000
-                return 0.02 + (n / 1000.0) * 0.03  # 0.02..0.05
-            df["conversion_benchmark"] = df["sku_id"].apply(_bench_from_sku) if "sku_id" in df.columns else 0.03
-        if "competitor_price" not in df.columns and "current_price" in df.columns:
-            # Assume mild competitor undercut/overcut distribution for demo if absent.
-            df["competitor_price"] = df["current_price"]
-        if "mrp" not in df.columns and "current_price" in df.columns:
-            df["mrp"] = (df["current_price"] * 1.15).round(0)
-        if "stockout_risk_pct" not in df.columns:
-            # Heuristic proxy: very low days_of_cover implies higher stockout risk.
-            if "days_of_cover" in df.columns:
-                df["stockout_risk_pct"] = (100 * (1 - (df["days_of_cover"].clip(lower=0, upper=30) / 30))).round(0)
-            else:
-                df["stockout_risk_pct"] = 0
-        if "ageing_days" not in df.columns:
-            df["ageing_days"] = 10
-        if "days_to_season_end" not in df.columns:
-            df["days_to_season_end"] = None
-        if "product_type" not in df.columns:
-            df["product_type"] = "stable"
-
-        # Split logic
-        catalog_cols = ["sku_id", "product_name", "product_type", "hero_sku"]
-        inventory_cols = ["sku_id", "stock_on_hand", "days_of_cover", "sell_through_weekly_pct", "ageing_days", "stockout_risk_pct", "days_to_season_end"]
-        ad_cols = ["sku_id", "current_ad_spend_per_unit", "roas", "conversion_rate", "ctr", "cpc", "last_30d_sales", "avg_daily_sessions", "conversion_benchmark"]
-        pricing_cols = [c for c in df.columns if c not in inventory_cols[1:] and c not in ad_cols[1:] and c not in catalog_cols[1:]]
-
-        def split_and_save(columns, folder, brand_prefix):
-            target_cols = [c for c in columns if c in df.columns]
-
-            if len(target_cols) > 1:
-                sub_df = df[target_cols]
-
-                os.makedirs(os.path.join(data_dir, folder), exist_ok=True)
-
-                path = os.path.join(
-                    data_dir,
-                    folder,
-                    f"{brand_prefix}_{folder}.csv"
-                )
-                print(f"Would save {folder}: {len(sub_df)} rows")
-                #sub_df.to_csv(path, index=False)
-
-        brand = "myntra" if "myntra" in safe_filename.lower() else "fabindia" if "fabindia" in safe_filename.lower() else "active"
-        
-        split_and_save(catalog_cols, "catalog", brand)
-        split_and_save(inventory_cols, "inventory", brand)
-        split_and_save(ad_cols, "advertising", brand)
-        split_and_save(pricing_cols, "pricing", brand)
-
-        # Reset config to baseline after any data refresh so demos start from a known state.
-        global CONFIG
-        CONFIG = reset_config_to_defaults()
-
-        log_upload_history(safe_filename, "success", f"Ingested {len(df)} SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains.")
-        return {"message": "Catalog ingested and partitioned successfully (settings reset to defaults)", "filename": safe_filename, "config_version": CONFIG.get("config_version")}
-    except Exception as e:
-        print("UPLOAD ERROR:", str(e))
-        log_upload_history(safe_filename, "failed", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/upload-test")
-async def upload_test(file: UploadFile = File(...)):
-    try:
-        # ------------------------------------------------------------------
-        # ENV CHECK
-        # ------------------------------------------------------------------
-
         blob_token = os.getenv("BLOB_READ_WRITE_TOKEN")
 
         if not blob_token:
@@ -819,147 +712,218 @@ async def upload_test(file: UploadFile = File(...)):
                 detail="Missing BLOB_READ_WRITE_TOKEN environment variable"
             )
 
-        # ------------------------------------------------------------------
-        # READ FILE
-        # ------------------------------------------------------------------
-
-        safe_filename = os.path.basename(
-            file.filename or "uploaded_catalog.csv"
-        )
-
         content = await file.read()
-
         decoded_content = content.decode("utf-8-sig")
-
         df = pd.read_csv(io.StringIO(decoded_content))
-
-        # ------------------------------------------------------------------
-        # COLUMN TRANSFORMATIONS
-        # ------------------------------------------------------------------
 
         rename_map = {}
 
-        if (
-            "cost_of_goods_sold" in df.columns
-            and "cogs" not in df.columns
-        ):
+        if "cost_of_goods_sold" in df.columns and "cogs" not in df.columns:
             rename_map["cost_of_goods_sold"] = "cogs"
 
-        if (
-            "sell_through_rate_weekly" in df.columns
-            and "sell_through_weekly_pct" not in df.columns
-        ):
-            rename_map[
-                "sell_through_rate_weekly"
-            ] = "sell_through_weekly_pct"
+        if "sell_through_rate_weekly" in df.columns and "sell_through_weekly_pct" not in df.columns:
+            rename_map["sell_through_rate_weekly"] = "sell_through_weekly_pct"
 
-        if (
-            "roas_30d" in df.columns
-            and "roas" not in df.columns
-        ):
+        if "roas_30d" in df.columns and "roas" not in df.columns:
             rename_map["roas_30d"] = "roas"
 
         if rename_map:
             df = df.rename(columns=rename_map)
 
-        # ------------------------------------------------------------------
-        # CONVERT BACK TO CSV IN MEMORY
-        # ------------------------------------------------------------------
+        if "conversion_rate" not in df.columns:
+            def _conv_from_sku(s):
+                h = hashlib.md5(str(s).encode("utf-8")).hexdigest()
+                n = int(h[:8], 16) % 1000
+                return 0.015 + (n / 1000.0) * 0.05
 
-        output_buffer = io.StringIO()
+            df["conversion_rate"] = df["sku_id"].apply(_conv_from_sku) if "sku_id" in df.columns else 0.03
 
-        df.to_csv(output_buffer, index=False)
+        if "ctr" not in df.columns:
+            df["ctr"] = 0.02
 
-        transformed_csv_bytes = output_buffer.getvalue().encode("utf-8")
+        if "cpc" not in df.columns:
+            df["cpc"] = 10
 
-        # ------------------------------------------------------------------
-        # BUILD BLOB PATH
-        # ------------------------------------------------------------------
+        if "last_30d_sales" not in df.columns:
+            df["last_30d_sales"] = 120
 
-        timestamp = datetime.now(timezone.utc).strftime(
-            "%Y%m%dT%H%M%SZ"
+        if "avg_daily_sessions" not in df.columns:
+            df["avg_daily_sessions"] = 500
+
+        if "conversion_benchmark" not in df.columns:
+            def _bench_from_sku(s):
+                h = hashlib.md5((str(s) + "_bench").encode("utf-8")).hexdigest()
+                n = int(h[:8], 16) % 1000
+                return 0.02 + (n / 1000.0) * 0.03
+
+            df["conversion_benchmark"] = df["sku_id"].apply(_bench_from_sku) if "sku_id" in df.columns else 0.03
+
+        if "competitor_price" not in df.columns and "current_price" in df.columns:
+            df["competitor_price"] = df["current_price"]
+
+        if "mrp" not in df.columns and "current_price" in df.columns:
+            df["mrp"] = (df["current_price"] * 1.15).round(0)
+
+        if "stockout_risk_pct" not in df.columns:
+            if "days_of_cover" in df.columns:
+                df["stockout_risk_pct"] = (
+                    100 * (1 - (df["days_of_cover"].clip(lower=0, upper=30) / 30))
+                ).round(0)
+            else:
+                df["stockout_risk_pct"] = 0
+
+        if "ageing_days" not in df.columns:
+            df["ageing_days"] = 10
+
+        if "days_to_season_end" not in df.columns:
+            df["days_to_season_end"] = None
+
+        if "product_type" not in df.columns:
+            df["product_type"] = "stable"
+
+        if "hero_sku" not in df.columns:
+            df["hero_sku"] = False
+
+        catalog_cols = [
+            "sku_id",
+            "product_name",
+            "product_type",
+            "hero_sku",
+        ]
+
+        inventory_cols = [
+            "sku_id",
+            "stock_on_hand",
+            "days_of_cover",
+            "sell_through_weekly_pct",
+            "ageing_days",
+            "stockout_risk_pct",
+            "days_to_season_end",
+        ]
+
+        ad_cols = [
+            "sku_id",
+            "current_ad_spend_per_unit",
+            "roas",
+            "conversion_rate",
+            "ctr",
+            "cpc",
+            "last_30d_sales",
+            "avg_daily_sessions",
+            "conversion_benchmark",
+        ]
+
+        pricing_cols = [
+            c for c in df.columns
+            if c not in inventory_cols[1:]
+            and c not in ad_cols[1:]
+            and c not in catalog_cols[1:]
+        ]
+
+        brand = (
+            "myntra"
+            if "myntra" in safe_filename.lower()
+            else "fabindia"
+            if "fabindia" in safe_filename.lower()
+            else "active"
         )
 
-        blob_path = (
-            f"uploads/test/{timestamp}_{safe_filename}"
-        )
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
-        # ------------------------------------------------------------------
-        # UPLOAD TO VERCEL BLOB
-        # ------------------------------------------------------------------
+        uploaded_blobs = {}
 
-        headers = {
-            "Authorization": f"Bearer {blob_token}"
-        }
+        async def split_and_upload(columns, folder):
+            target_cols = [c for c in columns if c in df.columns]
 
-        files = {
-            "file": (
-                blob_path,
-                transformed_csv_bytes,
-                "text/csv"
-            )
-        }
+            if len(target_cols) <= 1:
+                return None
 
-        data = {
-            "pathname": blob_path
-        }
+            sub_df = df[target_cols]
 
-        async with AsyncBlobClient() as blob_client:
-            blob = await blob_client.put(
-                blob_path,
-                transformed_csv_bytes,
-                access="private",
-                content_type="text/csv",
-                add_random_suffix=False,
-            )
-        # ------------------------------------------------------------------
-        # HANDLE UPLOAD FAILURE
-        # ------------------------------------------------------------------
+            output_buffer = io.StringIO()
+            sub_df.to_csv(output_buffer, index=False)
+            csv_bytes = output_buffer.getvalue().encode("utf-8")
 
-        # if response.status_code not in [200, 201]:
+            blob_path = f"data/{folder}/{brand}_{folder}.csv"
 
-        #     raise HTTPException(
-        #         status_code=500,
-        #         detail={
-        #             "message": "Vercel Blob upload failed",
-        #             "status_code": response.status_code,
-        #             "response": response.text,
-        #         },
-        #     )
+            async with AsyncBlobClient() as blob_client:
+                blob = await blob_client.put(
+                    blob_path,
+                    csv_bytes,
+                    access="private",
+                    content_type="text/csv",
+                    add_random_suffix=False,
+                    allow_overwrite=True,
+                )
 
-        # blob_result = response.json()
-
-        # ------------------------------------------------------------------
-        # SUCCESS RESPONSE
-        # ------------------------------------------------------------------
-
-       
-        return {
-            "message": (
-                "Upload parsed, transformed, "
-                "and saved to Vercel Blob successfully"
-            ),
-            "filename": safe_filename,
-            "rows": len(df),
-            "columns": list(df.columns),
-            "rename_map": rename_map,
-            "blob": {
+            return {
+                "folder": folder,
+                "rows": len(sub_df),
+                "columns": list(sub_df.columns),
                 "pathname": blob.pathname,
                 "url": blob.url,
-            },
+            }
+
+        uploaded_blobs["catalog"] = await split_and_upload(catalog_cols, "catalog")
+        uploaded_blobs["inventory"] = await split_and_upload(inventory_cols, "inventory")
+        uploaded_blobs["advertising"] = await split_and_upload(ad_cols, "advertising")
+        uploaded_blobs["pricing"] = await split_and_upload(pricing_cols, "pricing")
+
+        uploaded_blobs = {
+            k: v for k, v in uploaded_blobs.items()
+            if v is not None
         }
 
-    except HTTPException:
-        raise
+        metadata = {
+            "filename": safe_filename,
+            "brand": brand,
+            "rows": len(df),
+            "uploaded_at": timestamp,
+            "rename_map": rename_map,
+            "domains": uploaded_blobs,
+            "status": "success",
+            "message": (
+                f"Ingested {len(df)} SKUs. Distributed across Catalog, "
+                "Inventory, Ads, and Pricing domains."
+            ),
+        }
+
+        metadata_bytes = json.dumps(metadata, indent=2).encode("utf-8")
+
+        metadata_path = "data/uploads/latest_upload.json"
+
+        async with AsyncBlobClient() as blob_client:
+            metadata_blob = await blob_client.put(
+                metadata_path,
+                metadata_bytes,
+                access="private",
+                content_type="application/json",
+                add_random_suffix=False,
+                allow_overwrite=True,
+            )
+
+        global CONFIG
+        CONFIG = get_default_config()
+        CONFIG["config_version"] = datetime.now(timezone.utc).isoformat()
+
+        return {
+            "message": "Catalog ingested and partitioned successfully using Vercel Blob",
+            "filename": safe_filename,
+            "rows": len(df),
+            "brand": brand,
+            "rename_map": rename_map,
+            "domains": uploaded_blobs,
+            "metadata": {
+                "pathname": metadata_blob.pathname,
+                "url": metadata_blob.url,
+            },
+            "config_version": CONFIG.get("config_version"),
+        }
 
     except Exception as e:
+        print("UPLOAD ERROR:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
-        print("UPLOAD TEST BLOB ERROR:", str(e))
-
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-    )
         
 @app.get("/simulation/scenarios")
 def get_scenarios():
