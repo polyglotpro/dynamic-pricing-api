@@ -9,7 +9,7 @@ import hashlib
 from .config import CONFIG, save_config, reset_config_to_defaults
 from .simulation.experiment_runner import run_comparison, run_single_simulation
 from .simulation.scenario_library import SCENARIOS
-from vercel.blob import AsyncBlobClient
+import httpx
 
 app = FastAPI(title="Joint Pricing and Advertising Agent Demo", version="2.0")
 
@@ -806,6 +806,14 @@ async def upload_catalog(file: UploadFile = File(...)):
 @app.post("/upload-test")
 async def upload_test(file: UploadFile = File(...)):
     try:
+        blob_token = os.getenv("BLOB_READ_WRITE_TOKEN")
+
+        if not blob_token:
+            raise HTTPException(
+                status_code=500,
+                detail="Missing BLOB_READ_WRITE_TOKEN environment variable"
+            )
+
         safe_filename = os.path.basename(file.filename or "uploaded_catalog.csv")
 
         content = await file.read()
@@ -827,7 +835,6 @@ async def upload_test(file: UploadFile = File(...)):
         if rename_map:
             df = df.rename(columns=rename_map)
 
-        # Save transformed CSV to memory, not local filesystem
         output_buffer = io.StringIO()
         df.to_csv(output_buffer, index=False)
         transformed_csv_bytes = output_buffer.getvalue().encode("utf-8")
@@ -835,14 +842,33 @@ async def upload_test(file: UploadFile = File(...)):
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         blob_path = f"uploads/test/{timestamp}_{safe_filename}"
 
-        client = AsyncBlobClient()
+        upload_url = f"https://blob.vercel-storage.com/{blob_path}"
 
-        blob = await client.put(
-            blob_path,
-            transformed_csv_bytes,
-            access="private",
-            add_random_suffix=False,
-        )
+        headers = {
+            "Authorization": f"Bearer {blob_token}",
+            "Content-Type": "text/csv",
+            "x-add-random-suffix": "0",
+            "x-access": "private",
+        }
+
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.put(
+                upload_url,
+                headers=headers,
+                content=transformed_csv_bytes,
+            )
+
+        if response.status_code not in [200, 201]:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "message": "Vercel Blob upload failed",
+                    "status_code": response.status_code,
+                    "response": response.text,
+                },
+            )
+
+        blob_result = response.json()
 
         return {
             "message": "Upload parsed, transformed, and saved to Vercel Blob successfully",
@@ -850,11 +876,11 @@ async def upload_test(file: UploadFile = File(...)):
             "rows": len(df),
             "columns": list(df.columns),
             "rename_map": rename_map,
-            "blob": {
-                "pathname": blob.pathname,
-                "url": blob.url,
-            },
+            "blob": blob_result,
         }
+
+    except HTTPException:
+        raise
 
     except Exception as e:
         print("UPLOAD TEST BLOB ERROR:", str(e))
