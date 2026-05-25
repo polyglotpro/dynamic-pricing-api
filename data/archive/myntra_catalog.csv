@@ -1,0 +1,11 @@
+sku_id,product_name,product_type,current_price,mrp,cogs,competitor_price,current_ad_spend_per_unit,roas,conversion_rate,ctr,cpc,stock_on_hand,days_of_cover,sell_through_weekly_pct,ageing_days,stockout_risk_pct,days_to_season_end,weekly_sales_vs_baseline,trend_7d_pct,hero_sku,demand_uncertainty_sigma,last_30d_sales,avg_daily_sessions,historical_elasticity,conversion_benchmark
+RDS-DENIM-001,Roadster Skinny Fit Jeans,stable,1499,1999,650,1399,150,4.2,2.4,3.2,12,450,45,12,20,5,,1.1,5,false,0.15,850,4500,-2.1,2.2
+HRX-TEE-002,HRX Training T-Shirt,stable,899,1299,350,849,100,5.5,3.5,4.5,8,1200,60,18,15,2,,1.4,12,true,0.12,3200,15000,-1.4,3.5
+ANK-KURTA-003,Anouk Printed Kurta,seasonal,1499,2499,600,1350,200,3.1,1.8,2.8,15,80,12,5,45,35,15,0.8,-15,false,0.25,210,1800,-1.9,1.6
+BIB-KURTA-004,Biba Festive Kurta,seasonal,2999,4499,1200,2899,450,2.1,1.2,1.8,25,25,8,25,12,65,10,1.8,45,true,0.30,85,1200,-1.1,1.1
+NIKE-AIR-007,Nike Air Max Sneakers,stable,10495,12995,6200,9999,1200,3.5,1.5,2.2,45,45,30,4,12,15,,1.05,5,true,0.18,55,1000,-0.9,1.4
+WRG-POLO-008,Wrangler Solid Polo,stable,1499,1999,650,1399,220,3.2,2.5,3.4,14,500,80,2,65,5,,0.7,-25,false,0.22,410,2500,-2.3,2.4
+HM-HOOD-009,H&M Oversized Hoodie,seasonal,2299,2999,1100,2399,400,4.8,4.2,5.2,18,15,5,35,10,85,30,2.1,65,true,0.15,290,1400,-1.2,4.0
+CASIO-ENT-018,Casio Enticer Watch,stable,4595,5495,2800,4200,600,2.5,1.2,1.8,32,45,45,2,120,12,,0.9,-5,false,0.10,32,900,-0.7,1.1
+MAS-KURTA-012,Mast & Harbour Kurta,stable,1299,1899,550,1199,180,4.1,2.8,3.2,10,300,40,15,30,5,,1.2,10,false,0.15,620,3200,-2.0,2.7
+HIG-JEAN-015,Highlander Slim Tapered,stable,999,1599,400,949,120,5.1,3.5,4.8,9,800,70,22,25,2,,1.5,20,false,0.12,1100,6000,-2.5,3.4

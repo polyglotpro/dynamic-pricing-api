@@ -1,0 +1,11 @@
+sku_id,product_name,product_type,current_price,mrp,cogs,competitor_price,current_ad_spend_per_unit,roas,conversion_rate,ctr,cpc,stock_on_hand,days_of_cover,sell_through_weekly_pct,ageing_days,stockout_risk_pct,days_to_season_end,weekly_sales_vs_baseline,trend_7d_pct,hero_sku,demand_uncertainty_sigma,last_30d_sales,avg_daily_sessions,historical_elasticity,conversion_benchmark
+FAB-KRT-CH-001,Chanderi Silk Kurta,stable,4500,4999,1800,4300,350,5.2,2.8,3.5,15,120,45,15,12,5,,1.2,8,true,0.12,450,1200,-1.1,2.5
+FAB-KRT-CT-002,Cotton Daily Kurta,stable,1499,1999,600,1399,180,4.5,4.2,5.5,8,450,30,25,20,10,,1.1,12,true,0.15,1200,5000,-2.4,3.8
+FAB-SRE-SLK-003,Banarasi Silk Saree,seasonal,12500,15000,5500,11999,1200,3.1,1.2,1.8,45,25,60,5,45,2,30,0.8,-10,false,0.20,45,800,-0.8,1.1
+FAB-SRE-CTN-004,Handloom Cotton Saree,seasonal,3200,3999,1200,3100,450,3.8,2.5,3.2,18,85,25,18,15,15,20,1.3,25,false,0.18,180,1500,-1.8,2.2
+FAB-SHR-LIN-005,Linen Formal Shirt,stable,2499,2999,950,2350,300,4.2,2.1,2.8,12,200,50,10,35,8,,0.95,-5,false,0.14,320,2200,-2.1,2.0
+FAB-DUP-PLM-006,Phulkari Embroidered Dupatta,stable,899,1299,350,849,100,6.5,5.1,6.5,6,600,90,12,60,2,,1.0,0,false,0.10,850,4000,-1.5,4.5
+FAB-WST-WOL-007,Woolen Nehru Jacket,seasonal,5500,6999,2200,5300,600,2.5,1.5,2.1,35,15,10,45,5,90,15,2.2,55,true,0.25,90,1100,-1.2,1.4
+FAB-PNT-CTN-008,Cotton Slim-Fit Trousers,stable,1899,2499,750,1799,220,4.8,3.2,4.1,10,320,40,20,25,12,,1.15,15,false,0.16,410,2800,-1.9,3.0
+FAB-TUN-KMD-009,Kalamkari Printed Tunics,seasonal,2800,3499,1100,2650,400,3.5,2.1,2.9,20,45,18,30,12,45,10,1.4,35,false,0.22,150,1800,-2.2,1.9
+FAB-HOM-BD-010,Block Print Bedsheet,stable,5999,7999,2400,5800,800,3.2,1.8,2.4,28,150,60,8,45,5,,0.85,-15,true,0.18,110,1400,-1.4,1.6

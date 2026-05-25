@@ -1,0 +1,140 @@
+[
+  {
+    "timestamp": "2026-05-24T17:53:32.609639",
+    "filename": "demo_winter_focus_myntra.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-24T07:41:12.547731",
+    "filename": "demo_master_catalog_B.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-22T16:57:16.326617",
+    "filename": "myntra_realnames_saree_kurta_winterjacket_master.csv",
+    "status": "success",
+    "details": "Ingested 550 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-22T07:51:41.883439",
+    "filename": "demo_winter_focus_myntra.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-21T20:14:42.874632",
+    "filename": "demo_master_catalog_A.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-21T19:56:53.164460",
+    "filename": "demo_winter_focus_myntra.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-21T19:26:52.359112",
+    "filename": "demo_master_catalog_A.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-21T19:23:32.632434",
+    "filename": "demo_winter_focus_myntra.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-21T19:23:12.342241",
+    "filename": "demo_winter_focus_fabindia_soch.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-21T19:04:21.474063",
+    "filename": "demo_winter_focus_myntra.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-21T19:02:42.168432",
+    "filename": "demo_master_catalog_B.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-21T19:01:06.877487",
+    "filename": "demo_master_catalog_B.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-21T18:55:14.918220",
+    "filename": "demo_winter_focus_myntra.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-21T18:51:35.186809",
+    "filename": "demo_winter_focus_myntra.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-21T18:11:32.809200",
+    "filename": "demo_winter_focus_fabindia_soch.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-21T18:09:23.587764",
+    "filename": "demo_winter_focus_myntra.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-21T13:24:52.632143",
+    "filename": "demo_master_catalog_A.csv",
+    "status": "success",
+    "details": "Ingested 500 SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains."
+  },
+  {
+    "timestamp": "2026-05-05T06:19:19.824635",
+    "filename": "fabindia_catalog.csv",
+    "status": "success",
+    "details": "Ingested 10 SKUs"
+  },
+  {
+    "timestamp": "2026-05-05T06:19:08.647862",
+    "filename": "myntra_catalog.csv",
+    "status": "success",
+    "details": "Ingested 10 SKUs"
+  },
+  {
+    "timestamp": "2026-05-05T06:18:18.116695",
+    "filename": "sample_input.csv",
+    "status": "success",
+    "details": "Ingested 10 SKUs"
+  },
+  {
+    "timestamp": "2026-05-05T06:16:55.500308",
+    "filename": "fabindia_catalog.csv",
+    "status": "success",
+    "details": "Ingested 10 SKUs"
+  },
+  {
+    "timestamp": "2026-05-05T06:15:19.516578",
+    "filename": "fabindia_catalog.csv",
+    "status": "success",
+    "details": "Ingested 10 SKUs"
+  },
+  {
+    "timestamp": "2026-05-05T06:14:21.735664",
+    "filename": "fabindia_catalog.csv",
+    "status": "failed",
+    "details": "name 'pd' is not defined"
+  }
+]
