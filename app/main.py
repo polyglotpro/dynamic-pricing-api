@@ -701,7 +701,7 @@ async def approve_strategy(data: Dict[str, Any]):
 async def upload_catalog(file: UploadFile = File(...)):
     safe_filename = os.path.basename(file.filename)
     # Avoid blocking the event loop / worker thread.
-    await asyncio.sleep(3)
+    # await asyncio.sleep(3)
     try:
         content = await file.read()
         decoded_content = content.decode("utf-8-sig")
@@ -770,9 +770,18 @@ async def upload_catalog(file: UploadFile = File(...)):
 
         def split_and_save(columns, folder, brand_prefix):
             target_cols = [c for c in columns if c in df.columns]
+
             if len(target_cols) > 1:
                 sub_df = df[target_cols]
-                path = os.path.join(data_dir, folder, f"{brand_prefix}_{folder}.csv")
+
+                os.makedirs(os.path.join(data_dir, folder), exist_ok=True)
+
+                path = os.path.join(
+                    data_dir,
+                    folder,
+                    f"{brand_prefix}_{folder}.csv"
+                )
+
                 sub_df.to_csv(path, index=False)
 
         brand = "myntra" if "myntra" in safe_filename.lower() else "fabindia" if "fabindia" in safe_filename.lower() else "active"
@@ -789,6 +798,7 @@ async def upload_catalog(file: UploadFile = File(...)):
         log_upload_history(safe_filename, "success", f"Ingested {len(df)} SKUs. Distributed across Catalog, Inventory, Ads, and Pricing domains.")
         return {"message": "Catalog ingested and partitioned successfully (settings reset to defaults)", "filename": safe_filename, "config_version": CONFIG.get("config_version")}
     except Exception as e:
+        print("UPLOAD ERROR:", str(e))
         log_upload_history(safe_filename, "failed", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
