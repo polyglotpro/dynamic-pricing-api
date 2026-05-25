@@ -802,6 +802,11 @@ async def upload_catalog(file: UploadFile = File(...)):
         log_upload_history(safe_filename, "failed", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/upload-test")
+async def upload_test(file: UploadFile = File(...)):
+    return {
+        "filename": file.filename
+    }
 
 @app.get("/simulation/scenarios")
 def get_scenarios():
