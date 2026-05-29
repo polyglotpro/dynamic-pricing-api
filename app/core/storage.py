@@ -44,12 +44,6 @@ class BlobStorage:
     def _settings_path(self) -> str:
         return f"{self.root_prefix}/metadata/settings.json"
 
-    def _blob_access_mode(self) -> str:
-        mode = os.getenv("BLOB_ACCESS_MODE", "auto").strip().lower()
-        if mode in {"public", "private"}:
-            return mode
-        return "auto"
-
     async def write_domain_frame(self, domain: str, df: pd.DataFrame, brand: str, timestamp: Optional[str] = None) -> BlobArtifact:
         self._require_token()
         ts = timestamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -89,36 +83,31 @@ class BlobStorage:
 
     async def read_json(self, path: str) -> Any:
         self._require_token()
-        last_error = None
-        access_modes = [self._blob_access_mode()]
-        if access_modes[0] == "auto":
-            access_modes = ["private", "public"]
+        try:
+            async with AsyncBlobClient() as blob_client:
+                blob = await blob_client.get(
+                    path,
+                    access="private",
+                    token=os.getenv("BLOB_READ_WRITE_TOKEN"),
+                )
+            if blob is None:
+                raise HTTPException(status_code=404, detail=f"Blob not found: {path}")
+            if hasattr(blob, "download"):
+                content = await blob.download()
+            elif hasattr(blob, "body"):
+                content = blob.body
+            else:
+                content = blob
+            if isinstance(content, bytes):
+                return json.loads(content.decode("utf-8"))
+            if isinstance(content, str):
+                return json.loads(content)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail=f"Blob not found or unreadable: {path}") from exc
 
-        for access_mode in access_modes:
-            try:
-                async with AsyncBlobClient() as blob_client:
-                    blob = await blob_client.get(
-                        path,
-                        access=access_mode,
-                        token=os.getenv("BLOB_READ_WRITE_TOKEN"),
-                    )
-                if blob is None:
-                    continue
-                if hasattr(blob, "download"):
-                    content = await blob.download()
-                elif hasattr(blob, "body"):
-                    content = blob.body
-                else:
-                    content = blob
-                if isinstance(content, bytes):
-                    return json.loads(content.decode("utf-8"))
-                if isinstance(content, str):
-                    return json.loads(content)
-            except Exception as exc:
-                last_error = exc
-                continue
-
-        raise HTTPException(status_code=404, detail=f"Blob not found or unreadable: {path}") from last_error
+        raise HTTPException(status_code=500, detail=f"Unsupported blob payload type for '{path}'")
 
     async def write_latest_manifest(self, payload: dict[str, Any]) -> BlobArtifact:
         return await self.write_json(self._latest_manifest_path(), payload, overwrite=True)
@@ -147,62 +136,34 @@ class BlobStorage:
 
     async def read_latest_domain_frame(self, domain: str) -> pd.DataFrame:
         self._require_token()
-        try:
-            async with AsyncBlobClient() as blob_client:
-                listed = await blob_client.list(
-                    prefix=f"{self.root_prefix}/{domain}/",
-                    token=os.getenv("BLOB_READ_WRITE_TOKEN"),
-                )
-        except Exception as exc:
-            raise HTTPException(status_code=404, detail=f"No Blob data found for domain '{domain}'") from exc
-
-        blobs = []
-        if isinstance(listed, list):
-            blobs = listed
-        elif hasattr(listed, "blobs"):
-            blobs = list(listed.blobs)
-        else:
-            blobs = list(listed or [])
-
-        def _path(item: Any) -> str:
-            if isinstance(item, dict):
-                return item.get("pathname") or item.get("path") or ""
-            return getattr(item, "pathname", None) or getattr(item, "path", None) or ""
-
-        csv_blobs = [b for b in blobs if _path(b).endswith(".csv")]
-        if not csv_blobs:
+        path = self._metadata_path("latest_manifest")
+        manifest = await self.read_json(path)
+        domain_path = (manifest or {}).get("domains", {}).get(domain)
+        if not domain_path:
             raise HTTPException(status_code=404, detail=f"No Blob data found for domain '{domain}'")
 
-        domain_path = max(csv_blobs, key=_path)
-        domain_path = _path(domain_path)
+        try:
+            async with AsyncBlobClient() as blob_client:
+                blob = await blob_client.get(
+                    domain_path,
+                    access="private",
+                    token=os.getenv("BLOB_READ_WRITE_TOKEN"),
+                )
+            if blob is None:
+                raise HTTPException(status_code=404, detail=f"Blob not found: {domain_path}")
+            if hasattr(blob, "download"):
+                content = await blob.download()
+            elif hasattr(blob, "body"):
+                content = blob.body
+            else:
+                content = blob
+            if isinstance(content, bytes):
+                return pd.read_csv(io.BytesIO(content))
+            if isinstance(content, str):
+                return pd.read_csv(io.StringIO(content))
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail=f"Blob not found: {domain_path}") from exc
 
-        last_error = None
-        access_modes = [self._blob_access_mode()]
-        if access_modes[0] == "auto":
-            access_modes = ["private", "public"]
-
-        for access_mode in access_modes:
-            try:
-                async with AsyncBlobClient() as blob_client:
-                    blob = await blob_client.get(
-                        domain_path,
-                        access=access_mode,
-                        token=os.getenv("BLOB_READ_WRITE_TOKEN"),
-                    )
-                if blob is None:
-                    continue
-                if hasattr(blob, "download"):
-                    content = await blob.download()
-                elif hasattr(blob, "body"):
-                    content = blob.body
-                else:
-                    content = blob
-                if isinstance(content, bytes):
-                    return pd.read_csv(io.BytesIO(content))
-                if isinstance(content, str):
-                    return pd.read_csv(io.StringIO(content))
-            except Exception as exc:
-                last_error = exc
-                continue
-
-        raise HTTPException(status_code=404, detail=f"Blob not found: {domain_path}") from last_error
+        raise HTTPException(status_code=500, detail=f"Unsupported blob payload type for '{domain}'")
