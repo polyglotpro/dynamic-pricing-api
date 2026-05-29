@@ -31,6 +31,10 @@ class BlobStorage:
     def _artifact_path(self, domain: str, brand: str, timestamp: str) -> str:
         return f"{self.root_prefix}/{domain}/{brand}_{domain}_{timestamp}.csv"
 
+    def _debug_path(self, name: str) -> str:
+        safe_name = name.strip().replace(" ", "_")
+        return f"{self.root_prefix}/debug/{safe_name}.json"
+
     def _metadata_path(self, name: str = "upload_history") -> str:
         return f"{self.root_prefix}/metadata/{name}.json"
 
@@ -62,6 +66,12 @@ class BlobStorage:
                 add_random_suffix=False,
             )
         return BlobArtifact(path=blob_path, pathname=blob.pathname)
+
+    async def write_debug_json(self, name: str, payload: Any) -> BlobArtifact:
+        return await self.write_json(self._debug_path(name), payload, overwrite=True)
+
+    async def read_debug_json(self, name: str) -> Any:
+        return await self.read_json(self._debug_path(name))
 
     async def write_json(self, path: str, payload: Any, *, overwrite: bool = False) -> BlobArtifact:
         self._require_token()

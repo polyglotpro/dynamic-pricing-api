@@ -713,6 +713,29 @@ async def approve_strategy(data: Dict[str, Any]):
 
     return {"status": "success", "message": f"Strategy for {data.get('sku_id')} committed to ledger."}
 
+
+@app.post("/debug/blob-put")
+async def debug_blob_put(payload: Dict[str, Any]):
+    name = payload.get("name", "sample")
+    value = payload.get("value", {})
+    artifact = await storage.write_debug_json(name, value)
+    return {
+        "status": "ok",
+        "name": name,
+        "pathname": artifact.pathname,
+        "value": value,
+    }
+
+
+@app.get("/debug/blob-get")
+async def debug_blob_get(name: str = "sample"):
+    value = await storage.read_debug_json(name)
+    return {
+        "status": "ok",
+        "name": name,
+        "value": value,
+    }
+
 @app.post("/upload-catalog")
 async def upload_catalog(file: UploadFile = File(...)):
     safe_filename = os.path.basename(file.filename or "uploaded_catalog.csv")
