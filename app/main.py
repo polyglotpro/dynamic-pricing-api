@@ -719,6 +719,15 @@ async def debug_blob_put(payload: Dict[str, Any]):
     name = payload.get("name", "sample")
     value = payload.get("value", {})
     artifact = await storage.write_debug_json(name, value)
+    await storage.write_debug_json(
+        f"{name}_meta",
+        {
+            "path": artifact.path,
+            "pathname": artifact.pathname,
+            "url": artifact.url,
+            "download_url": artifact.download_url,
+        },
+    )
     return {
         "status": "ok",
         "name": name,

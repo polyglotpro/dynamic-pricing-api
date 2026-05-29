@@ -72,21 +72,13 @@ class BlobStorage:
         return await self.write_json(self._debug_path(name), payload, overwrite=True)
 
     async def read_debug_json(self, name: str) -> Any:
-        path = self._debug_path(name)
+        meta_path = self._debug_path(f"{name}_meta")
+        meta = await self.read_json(meta_path)
+        read_target = meta.get("download_url") or meta.get("url") or meta.get("path") or self._debug_path(name)
         try:
-            return await self.read_json(path)
-        except Exception:
-            pass
-
-        # Try the SDK-returned private URL form for the same object.
-        private_url = f"https://{os.getenv('BLOB_STORE_ID', '').replace('store_', '').lower()}.private.blob.vercel-storage.com/{path}"
-        if private_url and "https://.private.blob.vercel-storage.com/" not in private_url:
-            try:
-                return await self.read_json(private_url)
-            except Exception as exc:
-                raise HTTPException(status_code=404, detail=f"Blob not found or unreadable: {path}") from exc
-
-        raise HTTPException(status_code=404, detail=f"Blob not found or unreadable: {path}")
+            return await self.read_json(read_target)
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail=f"Blob not found or unreadable: {self._debug_path(name)}") from exc
 
     async def write_json(self, path: str, payload: Any, *, overwrite: bool = False) -> BlobArtifact:
         self._require_token()
