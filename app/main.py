@@ -743,7 +743,26 @@ async def debug_blob_get(name: str = "sample"):
         }
 
     print(f"DEBUG BLOB READ: {stored_url}")
-    value = await storage.read_json(stored_url)
+    token = os.getenv("BLOB_READ_WRITE_TOKEN")
+    if not token:
+        raise HTTPException(status_code=500, detail="BLOB_READ_WRITE_TOKEN not set")
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            stored_url,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    if response.status_code != 200:
+        return {
+            "status": "error",
+            "name": name,
+            "read_target": stored_url,
+            "http_status": response.status_code,
+            "body": response.text,
+        }
+
+    value = response.json()
     return {
         "status": "ok",
         "name": name,
