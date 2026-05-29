@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import pandas as pd
+import httpx
 from fastapi import HTTPException
 from vercel.blob import AsyncBlobClient
 
@@ -45,6 +46,13 @@ class BlobStorage:
 
     def _settings_path(self) -> str:
         return f"{self.root_prefix}/metadata/settings.json"
+
+    def _private_blob_url(self, path: str) -> str:
+        store_id = os.getenv("BLOB_STORE_ID", "").strip()
+        if not store_id:
+            raise HTTPException(status_code=500, detail="BLOB_STORE_ID not set")
+        host = store_id.replace("store_", "").lower()
+        return f"https://{host}.private.blob.vercel-storage.com/{path}?download=1"
 
     async def write_domain_frame(self, domain: str, df: pd.DataFrame, brand: str, timestamp: Optional[str] = None) -> BlobArtifact:
         self._require_token()
@@ -112,26 +120,15 @@ class BlobStorage:
     async def read_json(self, path: str) -> Any:
         self._require_token()
         try:
-            async with AsyncBlobClient() as blob_client:
-                blob = await blob_client.get(
-                    path,
-                    access="private",
-                    token=os.getenv("BLOB_READ_WRITE_TOKEN"),
+            url = self._private_blob_url(path)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    url,
+                    headers={"Authorization": f"Bearer {os.getenv('BLOB_READ_WRITE_TOKEN')}"},
                 )
-            if blob is None:
-                raise HTTPException(status_code=404, detail=f"Blob not found: {path}")
-            if hasattr(blob, "download"):
-                content = await blob.download()
-            elif hasattr(blob, "body"):
-                content = blob.body
-            else:
-                content = blob
-            if isinstance(content, bytes):
-                return json.loads(content.decode("utf-8"))
-            if isinstance(content, str):
-                return json.loads(content)
-        except HTTPException:
-            raise
+            if response.status_code != 200:
+                raise HTTPException(status_code=404, detail=f"Blob not found or unreadable: {path}")
+            return response.json()
         except Exception as exc:
             raise HTTPException(status_code=404, detail=f"Blob not found or unreadable: {path}") from exc
 
@@ -171,26 +168,16 @@ class BlobStorage:
             raise HTTPException(status_code=404, detail=f"No Blob data found for domain '{domain}'")
 
         try:
-            async with AsyncBlobClient() as blob_client:
-                blob = await blob_client.get(
-                    domain_path,
-                    access="private",
-                    token=os.getenv("BLOB_READ_WRITE_TOKEN"),
+            url = self._private_blob_url(domain_path)
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    url,
+                    headers={"Authorization": f"Bearer {os.getenv('BLOB_READ_WRITE_TOKEN')}"},
                 )
-            if blob is None:
+            if response.status_code != 200:
                 raise HTTPException(status_code=404, detail=f"Blob not found: {domain_path}")
-            if hasattr(blob, "download"):
-                content = await blob.download()
-            elif hasattr(blob, "body"):
-                content = blob.body
-            else:
-                content = blob
-            if isinstance(content, bytes):
-                return pd.read_csv(io.BytesIO(content))
-            if isinstance(content, str):
-                return pd.read_csv(io.StringIO(content))
-        except HTTPException:
-            raise
+            content = response.content
+            return pd.read_csv(io.BytesIO(content))
         except Exception as exc:
             raise HTTPException(status_code=404, detail=f"Blob not found: {domain_path}") from exc
 

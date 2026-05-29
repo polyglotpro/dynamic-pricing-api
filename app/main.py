@@ -913,22 +913,10 @@ async def upload_catalog(file: UploadFile = File(...)):
             "filename": safe_filename,
             "brand": brand,
             "domains": {
-                "catalog": {
-                    "path": f"data/catalog/{brand}_catalog_{timestamp}.csv",
-                    "pathname": uploaded_blobs.get("catalog"),
-                },
-                "inventory": {
-                    "path": f"data/inventory/{brand}_inventory_{timestamp}.csv",
-                    "pathname": uploaded_blobs.get("inventory"),
-                },
-                "advertising": {
-                    "path": f"data/advertising/{brand}_advertising_{timestamp}.csv",
-                    "pathname": uploaded_blobs.get("advertising"),
-                },
-                "pricing": {
-                    "path": f"data/pricing/{brand}_pricing_{timestamp}.csv",
-                    "pathname": uploaded_blobs.get("pricing"),
-                },
+                "catalog": {"path": f"data/catalog/{brand}_catalog_{timestamp}.csv"},
+                "inventory": {"path": f"data/inventory/{brand}_inventory_{timestamp}.csv"},
+                "advertising": {"path": f"data/advertising/{brand}_advertising_{timestamp}.csv"},
+                "pricing": {"path": f"data/pricing/{brand}_pricing_{timestamp}.csv"},
             },
         }
         await storage.write_latest_manifest(manifest_payload)
