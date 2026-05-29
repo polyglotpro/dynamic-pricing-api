@@ -1,5 +1,29 @@
 [
   {
+    "timestamp": "2026-05-25T23:32:08.655585",
+    "filename": "my_catalog.csv",
+    "status": "success",
+    "details": "Uploaded 1 rows and refreshed config"
+  },
+  {
+    "timestamp": "2026-05-25T23:31:53.281104",
+    "filename": "my_catalog.csv",
+    "status": "success",
+    "details": "Uploaded 1 rows and refreshed config"
+  },
+  {
+    "timestamp": "2026-05-25T23:29:03.186433",
+    "filename": "my_catalog.csv",
+    "status": "success",
+    "details": "Uploaded 1 rows and refreshed config"
+  },
+  {
+    "timestamp": "2026-05-25T23:24:45.780715",
+    "filename": "my_catalog.csv",
+    "status": "success",
+    "details": "Uploaded 1 rows and refreshed config"
+  },
+  {
     "timestamp": "2026-05-24T17:53:32.609639",
     "filename": "demo_winter_focus_myntra.csv",
     "status": "success",
