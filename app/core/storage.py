@@ -80,6 +80,16 @@ class BlobStorage:
         except Exception as exc:
             raise HTTPException(status_code=404, detail=f"Blob not found or unreadable: {self._debug_path(name)}") from exc
 
+    async def debug_read_target(self, name: str) -> dict[str, Any]:
+        meta_path = self._debug_path(f"{name}_meta")
+        meta = await self.read_json(meta_path)
+        read_target = meta.get("download_url") or meta.get("url") or meta.get("path") or self._debug_path(name)
+        return {
+            "meta_path": meta_path,
+            "read_target": read_target,
+            "meta": meta,
+        }
+
     async def write_json(self, path: str, payload: Any, *, overwrite: bool = False) -> BlobArtifact:
         self._require_token()
         body = json.dumps(payload, indent=2).encode("utf-8")

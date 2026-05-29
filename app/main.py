@@ -740,10 +740,14 @@ async def debug_blob_put(payload: Dict[str, Any]):
 
 @app.get("/debug/blob-get")
 async def debug_blob_get(name: str = "sample"):
+    debug_info = await storage.debug_read_target(name)
+    print(f"DEBUG BLOB READ: {debug_info['read_target']}")
     value = await storage.read_debug_json(name)
     return {
         "status": "ok",
         "name": name,
+        "read_target": debug_info["read_target"],
+        "meta_path": debug_info["meta_path"],
         "value": value,
     }
 
