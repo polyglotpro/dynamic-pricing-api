@@ -47,6 +47,9 @@ class BlobStorage:
     def _settings_path(self) -> str:
         return f"{self.root_prefix}/metadata/settings.json"
 
+    def _approvals_path(self) -> str:
+        return f"{self.root_prefix}/metadata/approvals.json"
+
     def _private_blob_url(self, path: str) -> str:
         store_id = os.getenv("BLOB_STORE_ID", "").strip()
         if not store_id:
@@ -158,6 +161,18 @@ class BlobStorage:
 
     async def write_settings(self, settings: dict[str, Any]) -> BlobArtifact:
         return await self.write_json(self._settings_path(), settings, overwrite=True)
+
+    async def read_approvals(self) -> list[dict[str, Any]]:
+        try:
+            payload = await self.read_json(self._approvals_path())
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return []
+            raise
+        return payload if isinstance(payload, list) else []
+
+    async def write_approvals(self, approvals: list[dict[str, Any]]) -> BlobArtifact:
+        return await self.write_json(self._approvals_path(), approvals[:500], overwrite=True)
 
     async def read_latest_domain_frame(self, domain: str) -> pd.DataFrame:
         self._require_token()

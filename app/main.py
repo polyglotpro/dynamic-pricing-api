@@ -704,14 +704,9 @@ async def approve_strategy(data: Dict[str, Any]):
         "engine_mode": CONFIG.get("engine_mode", "rule")
     }
 
-    try:
-        approvals = await storage.read_json("data/metadata/approvals.json")
-        if not isinstance(approvals, list):
-            approvals = []
-    except HTTPException:
-        approvals = []
+    approvals = await storage.read_approvals()
     approvals.insert(0, row)
-    await storage.write_json("data/metadata/approvals.json", approvals[:500], overwrite=True)
+    await storage.write_approvals(approvals)
 
     return {"status": "success", "message": f"Strategy for {data.get('sku_id')} committed to ledger."}
 
