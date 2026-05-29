@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import httpx
 import csv, io, os, json, pandas as pd, math
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
