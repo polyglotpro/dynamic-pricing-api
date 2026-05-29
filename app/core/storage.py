@@ -138,12 +138,33 @@ class BlobStorage:
     async def read_latest_domain_frame(self, domain: str) -> pd.DataFrame:
         self._require_token()
         try:
-            manifest = await self.read_json(self._latest_manifest_path())
+            async with AsyncBlobClient() as blob_client:
+                listed = await blob_client.list(
+                    prefix=f"{self.root_prefix}/{domain}/",
+                    token=os.getenv("BLOB_READ_WRITE_TOKEN"),
+                )
         except Exception as exc:
-            raise HTTPException(status_code=404, detail=f"No Blob manifest found for domain '{domain}'") from exc
-        domain_path = (manifest or {}).get("domains", {}).get(domain)
-        if not domain_path:
+            raise HTTPException(status_code=404, detail=f"No Blob data found for domain '{domain}'") from exc
+
+        blobs = []
+        if isinstance(listed, list):
+            blobs = listed
+        elif hasattr(listed, "blobs"):
+            blobs = list(listed.blobs)
+        else:
+            blobs = list(listed or [])
+
+        def _path(item: Any) -> str:
+            if isinstance(item, dict):
+                return item.get("pathname") or item.get("path") or ""
+            return getattr(item, "pathname", None) or getattr(item, "path", None) or ""
+
+        csv_blobs = [b for b in blobs if _path(b).endswith(".csv")]
+        if not csv_blobs:
             raise HTTPException(status_code=404, detail=f"No Blob data found for domain '{domain}'")
+
+        domain_path = max(csv_blobs, key=_path)
+        domain_path = _path(domain_path)
 
         last_error = None
         access_modes = [self._blob_access_mode()]
