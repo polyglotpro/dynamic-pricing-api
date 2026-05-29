@@ -46,6 +46,9 @@ class BlobStorage:
     def _settings_path(self) -> str:
         return f"{self.root_prefix}/metadata/settings.json"
 
+    def _blob_read_url(self, path: str, url: Optional[str], download_url: Optional[str]) -> str:
+        return download_url or url or path
+
     async def write_domain_frame(self, domain: str, df: pd.DataFrame, brand: str, timestamp: Optional[str] = None) -> BlobArtifact:
         self._require_token()
         ts = timestamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -124,6 +127,38 @@ class BlobStorage:
     async def write_latest_manifest(self, payload: dict[str, Any]) -> BlobArtifact:
         return await self.write_json(self._latest_manifest_path(), payload, overwrite=True)
 
+    async def read_blob_by_artifact(self, artifact: dict[str, Any] | BlobArtifact) -> Any:
+        self._require_token()
+        if isinstance(artifact, BlobArtifact):
+            path = artifact.path
+            url = artifact.url
+            download_url = artifact.download_url
+        else:
+            path = artifact.get("path") or artifact.get("pathname") or ""
+            url = artifact.get("url")
+            download_url = artifact.get("download_url")
+        read_url = self._blob_read_url(path, url, download_url)
+        try:
+            async with AsyncBlobClient() as blob_client:
+                blob = await blob_client.get(
+                    read_url,
+                    access="private",
+                    token=os.getenv("BLOB_READ_WRITE_TOKEN"),
+                )
+            if blob is None:
+                raise HTTPException(status_code=404, detail=f"Blob not found: {read_url}")
+            if hasattr(blob, "download"):
+                content = await blob.download()
+            elif hasattr(blob, "body"):
+                content = blob.body
+            else:
+                content = blob
+            return content
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail=f"Blob not found or unreadable: {read_url}") from exc
+
     async def read_upload_history(self) -> list[dict[str, Any]]:
         try:
             payload = await self.read_json(self._metadata_path("upload_history"))
@@ -150,32 +185,13 @@ class BlobStorage:
         self._require_token()
         path = self._metadata_path("latest_manifest")
         manifest = await self.read_json(path)
-        domain_path = (manifest or {}).get("domains", {}).get(domain)
-        if not domain_path:
+        domain_info = (manifest or {}).get("domains", {}).get(domain)
+        if not domain_info:
             raise HTTPException(status_code=404, detail=f"No Blob data found for domain '{domain}'")
 
-        try:
-            async with AsyncBlobClient() as blob_client:
-                blob = await blob_client.get(
-                    domain_path,
-                    access="private",
-                    token=os.getenv("BLOB_READ_WRITE_TOKEN"),
-                )
-            if blob is None:
-                raise HTTPException(status_code=404, detail=f"Blob not found: {domain_path}")
-            if hasattr(blob, "download"):
-                content = await blob.download()
-            elif hasattr(blob, "body"):
-                content = blob.body
-            else:
-                content = blob
-            if isinstance(content, bytes):
-                return pd.read_csv(io.BytesIO(content))
-            if isinstance(content, str):
-                return pd.read_csv(io.StringIO(content))
-        except HTTPException:
-            raise
-        except Exception as exc:
-            raise HTTPException(status_code=404, detail=f"Blob not found: {domain_path}") from exc
-
+        content = await self.read_blob_by_artifact(domain_info)
+        if isinstance(content, bytes):
+            return pd.read_csv(io.BytesIO(content))
+        if isinstance(content, str):
+            return pd.read_csv(io.StringIO(content))
         raise HTTPException(status_code=500, detail=f"Unsupported blob payload type for '{domain}'")
