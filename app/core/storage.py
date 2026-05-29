@@ -72,8 +72,11 @@ class BlobStorage:
 
     async def read_json(self, path: str) -> Any:
         self._require_token()
-        async with AsyncBlobClient() as blob_client:
-            blob = await blob_client.get(path)
+        try:
+            async with AsyncBlobClient() as blob_client:
+                blob = await blob_client.get(path)
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail=f"Blob not found or unreadable: {path}") from exc
         if blob is None:
             raise HTTPException(status_code=404, detail=f"Blob not found: {path}")
         if hasattr(blob, "download"):
@@ -115,13 +118,21 @@ class BlobStorage:
 
     async def read_latest_domain_frame(self, domain: str) -> pd.DataFrame:
         self._require_token()
-        manifest = await self.read_json(self._latest_manifest_path())
+        try:
+            manifest = await self.read_json(self._latest_manifest_path())
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail=f"No Blob manifest found for domain '{domain}'") from exc
         domain_path = (manifest or {}).get("domains", {}).get(domain)
         if not domain_path:
             raise HTTPException(status_code=404, detail=f"No Blob data found for domain '{domain}'")
 
-        async with AsyncBlobClient() as blob_client:
-            blob = await blob_client.get(domain_path)
+        try:
+            async with AsyncBlobClient() as blob_client:
+                blob = await blob_client.get(domain_path)
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail=f"Blob not found: {domain_path}") from exc
         if blob is None:
             raise HTTPException(status_code=404, detail=f"Blob not found: {domain_path}")
         if hasattr(blob, "download"):
