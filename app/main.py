@@ -1,18 +1,25 @@
 import asyncio
 import hashlib
-import httpx
-import csv, io, os, json, shutil, pandas as pd, time, math
+import csv, io, os, json, pandas as pd, math
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
-from .config import CONFIG, save_config, reset_config_to_defaults
+from .config import CONFIG, default_config
 from .simulation.experiment_runner import run_comparison, run_single_simulation
 from .simulation.scenario_library import SCENARIOS
-from vercel.blob import AsyncBlobClient
+from .core.storage import BlobStorage
 
 app = FastAPI(title="Joint Pricing and Advertising Agent Demo", version="2.0")
+storage = BlobStorage()
+
+
+@app.on_event("startup")
+async def load_persisted_settings():
+    persisted = await storage.read_settings()
+    if persisted:
+        CONFIG.update(persisted)
 
 # CORS:
 # - Local dev commonly runs Vite on :5173
@@ -295,54 +302,38 @@ def orchestrate(x: SKUInput, tags: List[str], p: Dict[str, Any], a: Dict[str, An
 def root():
     return {"status": "ok", "message": "Use POST /recommendation for JSON or POST /recommendations/csv for CSV upload."}
 
-def get_merged_data():
+async def get_merged_data():
     """
-    Professional Data Integration Pipeline:
-    Joins data from Catalog, Pricing, Inventory, and Advertising sources.
+    Blob-backed data integration pipeline.
+    Joins the latest catalog, pricing, inventory, and advertising CSVs from storage.
     """
-    base_path = os.path.join(os.path.dirname(__file__), "..", "data")
-    
-    # Priority order: Catalog (Names/Types) -> Pricing (Margins/Elasticity) -> Inventory -> Advertising
     merged_df = pd.DataFrame()
-    
+
     for folder in ["catalog", "pricing", "inventory", "advertising"]:
-        dir_path = os.path.join(base_path, folder)
-        if not os.path.exists(dir_path): continue
-        
-        files = [f for f in os.listdir(dir_path) if f.endswith('.csv')]
-        if not files: continue
-        
-        # Pick most recently modified file to avoid using stale data.
-        file_path = max(
-            (os.path.join(dir_path, f) for f in files),
-            key=lambda p: os.path.getmtime(p),
-        )
-        df = pd.read_csv(file_path)
-        
+        try:
+            df = await storage.read_latest_domain_frame(folder)
+        except HTTPException:
+            continue
+
         if merged_df.empty:
             merged_df = df
         else:
-            # Left join on sku_id to keep Catalog as the master list
-            merged_df = pd.merge(merged_df, df, on="sku_id", how="left", suffixes=('', '_dup'))
-            # Drop any duplicate columns from the join
-            merged_df = merged_df.loc[:, ~merged_df.columns.str.endswith('_dup')]
+            merged_df = pd.merge(merged_df, df, on="sku_id", how="left", suffixes=("", "_dup"))
+            merged_df = merged_df.loc[:, ~merged_df.columns.str.endswith("_dup")]
 
     if merged_df.empty:
-        # Fallback to old sample_input.csv if folders are empty
-        old_path = os.path.join(base_path, "sample_input.csv")
-        if os.path.exists(old_path):
-            merged_df = pd.read_csv(old_path)
-        else:
-            return {"error": "No data sources found in domain folders."}
+        return {"error": "No data sources found in Blob storage."}
 
-    # Fill NaNs with defaults and convert to list of dicts
-    merged_df = merged_df.fillna(0)
-    return merged_df.to_dict(orient='records')
+    return merged_df.fillna(0).to_dict(orient="records")
+
+async def load_inventory_from_storage():
+    return (await storage.read_latest_domain_frame("inventory")).fillna(0).to_dict(orient="records")
+
 
 @app.get("/inventory")
-def get_inventory():
+async def get_inventory():
     try:
-        return get_merged_data()
+        return await load_inventory_from_storage()
     except Exception as e:
         return {"error": str(e)}
 
@@ -418,8 +409,8 @@ def run_ai_engine(x: SKUInput, trace: List[Dict]):
     }
 
 @app.get("/all-recommendations")
-def get_all_recommendations():
-    inventory = get_inventory()
+async def get_all_recommendations():
+    inventory = await get_merged_data()
     if isinstance(inventory, dict) and "error" in inventory:
         return inventory
         
@@ -527,26 +518,28 @@ class SettingsUpdate(BaseModel):
     engine_mode: Optional[str] = Field(None)
 
 @app.get("/settings")
-def get_settings():
+async def get_settings():
+    persisted = await storage.read_settings()
+    if persisted:
+        CONFIG.update(persisted)
     return CONFIG
 
 @app.post("/settings")
-def update_settings(new_config: SettingsUpdate):
-    global CONFIG
+async def update_settings(new_config: SettingsUpdate):
     # Only update provided fields
     update_data = new_config.model_dump(exclude_unset=True)
     CONFIG.update(update_data)
-    save_config(CONFIG)
+    await storage.write_settings(CONFIG)
     return {"status": "success", "config": CONFIG}
 
 @app.post("/simulate")
-def simulate_recommendations(temp_config: Dict[str, Any]):
+async def simulate_recommendations(temp_config: Dict[str, Any]):
     """Runs recommendation logic using a temporary config without saving it."""
     # Create a local copy of settings for this run
     sim_config = CONFIG.copy()
     sim_config.update(temp_config)
     
-    inventory = get_inventory()
+    inventory = await get_merged_data()
     if isinstance(inventory, dict) and "error" in inventory:
         return inventory
         
@@ -557,26 +550,31 @@ def simulate_recommendations(temp_config: Dict[str, Any]):
             # To avoid refactoring every function signature, we can use a helper that 
             # temporarily overrides global CONFIG or just pass it in.
             # Let's refactor the core functions slightly to accept an optional config.
-            
+            def get_val(keys, default="0"):
+                for k in keys:
+                    if k in row and row[k] != "":
+                        return row[k]
+                return default
+
             clean = {
                 "sku_id": row["sku_id"],
                 "product_name": row.get("product_name"),
-                "product_type": "seasonal" if int(float(row.get("season_days_left") or 0)) > 0 else "stable",
+                "product_type": "seasonal" if int(float(get_val(["season_days_left", "days_to_season_end"], "0"))) > 0 else "stable",
                 "current_price": float(row["current_price"]),
-                "mrp": float(row.get("mrp") or row["current_price"]),
-                "cogs": float(row["cost"]),
-                "competitor_price": float(row["competitor_price"]),
-                "current_ad_spend_per_unit": float(row["current_ad_spend_per_unit"]),
-                "roas": float(row["roas"]),
-                "conversion_rate": float(row["conversion_rate"]),
-                "stock_on_hand": int(float(row["stock_on_hand"])),
-                "days_of_cover": float(row["days_of_cover"]),
-                "sell_through_weekly_pct": float(row["sell_through_rate_weekly"]) * 100,
-                "ageing_days": int(float(row["ageing_days"])),
-                "stockout_risk_pct": float(row["stockout_risk"]) * 100,
-                "days_to_season_end": int(float(row["season_days_left"])) if row.get("season_days_left") else None,
-                "weekly_sales_vs_baseline": float(row["sales_vs_baseline"]),
-                "trend_7d_pct": float(row["trend_change_7d_pct"]),
+                "mrp": float(get_val(["mrp", "current_price"], row["current_price"])),
+                "cogs": float(get_val(["cost", "cogs"], "0")),
+                "competitor_price": float(get_val(["competitor_price", "current_price"], row["current_price"])),
+                "current_ad_spend_per_unit": float(get_val(["current_ad_spend_per_unit", "ad_spend"], "0")),
+                "roas": float(get_val(["roas"], "0")),
+                "conversion_rate": float(get_val(["conversion_rate"], "0")),
+                "stock_on_hand": int(float(get_val(["stock_on_hand", "stock"], "0"))),
+                "days_of_cover": float(get_val(["days_of_cover"], "0")),
+                "sell_through_weekly_pct": float(get_val(["sell_through_weekly_pct", "sell_through_rate_weekly"], "0")) * (100 if float(get_val(["sell_through_weekly_pct", "sell_through_rate_weekly"], "0")) < 1 else 1),
+                "ageing_days": int(float(get_val(["ageing_days", "ageing"], "0"))),
+                "stockout_risk_pct": float(get_val(["stockout_risk_pct", "stockout_risk"], "0")) * (100 if float(get_val(["stockout_risk_pct", "stockout_risk"], "0")) < 1 else 1),
+                "days_to_season_end": int(float(get_val(["days_to_season_end", "season_days_left"], "0"))) if get_val(["days_to_season_end", "season_days_left"], "") != "" else None,
+                "weekly_sales_vs_baseline": float(get_val(["weekly_sales_vs_baseline", "sales_vs_baseline"], "1.0")),
+                "trend_7d_pct": float(get_val(["trend_7d_pct", "trend_change_7d_pct"], "0")),
                 "hero_sku": str(row.get("hero_sku", "false")).lower() in ["true", "1", "yes"]
             }
             x = SKUInput(**clean)
@@ -648,38 +646,23 @@ def orchestrate_sim(x, tags, p, a, trace, cfg):
         }
     }
 
-def log_upload_history(filename: str, status: str, details: str = ""):
-    history_path = os.path.join(os.path.dirname(__file__), "..", "data", "upload_history.json")
-    history = []
-    if os.path.exists(history_path):
-        with open(history_path, "r") as f:
-            history = json.load(f)
-    
+async def log_upload_history(filename: str, status: str, details: str = ""):
+    history = await storage.read_upload_history()
     history.insert(0, {
         "timestamp": datetime.now().isoformat(),
         "filename": filename,
         "status": status,
         "details": details
     })
-    
-    with open(history_path, "w") as f:
-        json.dump(history[:50], f, indent=2)
+    await storage.write_upload_history(history)
 
 @app.get("/uploads-history")
-def get_uploads_history():
-    history_path = os.path.join(os.path.dirname(__file__), "..", "data", "upload_history.json")
-    if os.path.exists(history_path):
-        with open(history_path, "r") as f:
-            return json.load(f)
-    return []
+async def get_uploads_history():
+    return await storage.read_upload_history()
 
 @app.post("/approve")
 async def approve_strategy(data: Dict[str, Any]):
     """Saves an approved strategy to the persistent transactions ledger."""
-    transactions_dir = os.path.join(os.path.dirname(__file__), "..", "data", "transactions")
-    os.makedirs(transactions_dir, exist_ok=True)
-    file_path = os.path.join(transactions_dir, "approvals.csv")
-    
     row = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "sku_id": data.get("sku_id"),
@@ -689,14 +672,16 @@ async def approve_strategy(data: Dict[str, Any]):
         "projected_margin": data.get("final_recommendation", {}).get("projected_margin_pct"),
         "engine_mode": CONFIG.get("engine_mode", "rule")
     }
-    
-    file_exists = os.path.exists(file_path)
-    with open(file_path, mode='a', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=row.keys())
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(row)
-        
+
+    try:
+        approvals = await storage.read_json("data/metadata/approvals.json")
+        if not isinstance(approvals, list):
+            approvals = []
+    except HTTPException:
+        approvals = []
+    approvals.insert(0, row)
+    await storage.write_json("data/metadata/approvals.json", approvals[:500])
+
     return {"status": "success", "message": f"Strategy for {data.get('sku_id')} committed to ledger."}
 
 @app.post("/upload-catalog")
@@ -704,14 +689,6 @@ async def upload_catalog(file: UploadFile = File(...)):
     safe_filename = os.path.basename(file.filename or "uploaded_catalog.csv")
 
     try:
-        blob_token = os.getenv("BLOB_READ_WRITE_TOKEN")
-
-        if not blob_token:
-            raise HTTPException(
-                status_code=500,
-                detail="Missing BLOB_READ_WRITE_TOKEN environment variable"
-            )
-
         content = await file.read()
         decoded_content = content.decode("utf-8-sig")
         df = pd.read_csv(io.StringIO(decoded_content))
@@ -828,69 +805,56 @@ async def upload_catalog(file: UploadFile = File(...)):
             else "active"
         )
 
+        uploaded_blobs = {}
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
-        uploaded_blobs = {}
-
         async def split_and_save(columns, folder, brand_prefix):
-
             target_cols = [c for c in columns if c in df.columns]
-
             if len(target_cols) > 1:
-
                 sub_df = df[target_cols]
-
-                output_buffer = io.StringIO()
-
-                sub_df.to_csv(output_buffer, index=False)
-
-                csv_bytes = output_buffer.getvalue().encode("utf-8")
-
-                # blob_path = (
-                #     f"data/{folder}/"
-                #     f"{brand_prefix}_{folder}.csv"
-                # )
-                blob_path = (
-                    f"data/{folder}/"
-                    f"{brand_prefix}_{folder}_{timestamp}.csv"
-                )
-                async with AsyncBlobClient() as blob_client:
-
-                    blob = await blob_client.put(
-                        blob_path,
-                        csv_bytes,
-                        access="private",
-                        content_type="text/csv",
-                        add_random_suffix=False,
-                    )
-
-                print(
-                    f"Uploaded {folder}: "
-                    f"{len(sub_df)} rows -> {blob.pathname}"
-                )
+                artifact = await storage.write_domain_frame(folder, sub_df, brand_prefix, timestamp=timestamp)
+                print(f"Uploaded {folder}: {len(sub_df)} rows -> {artifact.pathname}")
+                uploaded_blobs[folder] = artifact.pathname
 
         await split_and_save(catalog_cols, "catalog", brand)
         await split_and_save(inventory_cols, "inventory", brand)
         await split_and_save(ad_cols, "advertising", brand)
         await split_and_save(pricing_cols, "pricing", brand)
 
-        global CONFIG
-        CONFIG = reset_config_to_defaults()
+        manifest_payload = {
+            "timestamp": timestamp,
+            "filename": safe_filename,
+            "brand": brand,
+            "domains": uploaded_blobs,
+        }
+        await storage.write_latest_manifest(manifest_payload)
 
-        return {
+        # Reset settings so each upload starts from a known demo baseline.
+        updated_config = default_config()
+        CONFIG.clear()
+        CONFIG.update(updated_config)
+        await storage.write_settings(CONFIG)
+
+        response = {
             "message": "Catalog ingested and partitioned successfully using Vercel Blob",
             "filename": safe_filename,
             "rows": len(df),
             "brand": brand,
             "rename_map": rename_map,
-            "config_version": CONFIG.get("config_version"),
+            "uploaded_blobs": uploaded_blobs,
+            "config_version": updated_config.get("config_version"),
+            "config_updated_at": updated_config.get("config_updated_at"),
         }
+        await log_upload_history(safe_filename, "success", f"Uploaded {len(df)} rows and refreshed config")
+        return response
+    except HTTPException as exc:
+        await log_upload_history(safe_filename, "failed", exc.detail if isinstance(exc.detail, str) else json.dumps(exc.detail))
+        raise
+    except Exception as exc:
+        await log_upload_history(safe_filename, "failed", str(exc))
+        raise HTTPException(status_code=500, detail=f"Upload failed: {exc}")
 
-    except Exception as e:
-        print("UPLOAD ERROR:", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
 
-        
 @app.get("/simulation/scenarios")
 def get_scenarios():
     """Returns a list of available simulation scenarios."""
