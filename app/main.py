@@ -416,7 +416,11 @@ def run_ai_engine(x: SKUInput, trace: List[Dict]):
 async def get_all_recommendations():
     inventory = await get_merged_data()
     if isinstance(inventory, dict) and "error" in inventory:
-        return []
+        return {
+            "count": 0,
+            "results": [],
+            "errors": [{"error": inventory["error"]}],
+        }
         
     results = []
     errors = []
