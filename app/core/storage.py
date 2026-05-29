@@ -75,7 +75,7 @@ class BlobStorage:
         self._require_token()
         try:
             async with AsyncBlobClient() as blob_client:
-                blob = await blob_client.get(path)
+                blob = await blob_client.get(path, access="public")
         except Exception as exc:
             raise HTTPException(status_code=404, detail=f"Blob not found or unreadable: {path}") from exc
         if blob is None:
@@ -131,7 +131,7 @@ class BlobStorage:
 
         try:
             async with AsyncBlobClient() as blob_client:
-                blob = await blob_client.get(domain_path)
+                blob = await blob_client.get(domain_path, access="public")
         except Exception as exc:
             raise HTTPException(status_code=404, detail=f"Blob not found: {domain_path}") from exc
         if blob is None:
