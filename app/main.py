@@ -13,6 +13,7 @@ from .core.storage import BlobStorage
 
 app = FastAPI(title="Joint Pricing and Advertising Agent Demo", version="2.0")
 storage = BlobStorage()
+_probe_store: dict[str, str] = {}
 
 
 @app.on_event("startup")
@@ -719,35 +720,34 @@ async def debug_blob_put(payload: Dict[str, Any]):
     name = payload.get("name", "sample")
     value = payload.get("value", {})
     artifact = await storage.write_debug_json(name, value)
-    await storage.write_debug_json(
-        f"{name}_meta",
-        {
-            "path": artifact.path,
-            "pathname": artifact.pathname,
-            "url": artifact.url,
-            "download_url": artifact.download_url,
-        },
-    )
+    _probe_store[name] = artifact.download_url or artifact.url or artifact.path
     return {
         "status": "ok",
         "name": name,
         "pathname": artifact.pathname,
         "url": artifact.url,
         "download_url": artifact.download_url,
+        "stored_url": _probe_store[name],
         "value": value,
     }
 
 
 @app.get("/debug/blob-get")
 async def debug_blob_get(name: str = "sample"):
-    debug_info = await storage.debug_read_target(name)
-    print(f"DEBUG BLOB READ: {debug_info['read_target']}")
-    value = await storage.read_debug_json(name)
+    stored_url = _probe_store.get(name)
+    if not stored_url:
+        return {
+            "status": "error",
+            "name": name,
+            "error": f"No stored URL for probe '{name}' - run POST /debug/blob-put first",
+        }
+
+    print(f"DEBUG BLOB READ: {stored_url}")
+    value = await storage.read_json(stored_url)
     return {
         "status": "ok",
         "name": name,
-        "read_target": debug_info["read_target"],
-        "meta_path": debug_info["meta_path"],
+        "read_target": stored_url,
         "value": value,
     }
 
