@@ -312,11 +312,13 @@ async def get_merged_data():
     Joins the latest catalog, pricing, inventory, and advertising CSVs from storage.
     """
     merged_df = pd.DataFrame()
+    load_errors = []
 
     for folder in ["catalog", "pricing", "inventory", "advertising"]:
         try:
             df = await storage.read_latest_domain_frame(folder)
-        except HTTPException:
+        except HTTPException as exc:
+            load_errors.append({"domain": folder, "error": exc.detail})
             continue
 
         if merged_df.empty:
@@ -326,9 +328,15 @@ async def get_merged_data():
             merged_df = merged_df.loc[:, ~merged_df.columns.str.endswith("_dup")]
 
     if merged_df.empty:
-        return {"error": "No data sources found in Blob storage."}
+        return {
+            "error": "No data sources found in Blob storage.",
+            "load_errors": load_errors,
+        }
 
-    return merged_df.fillna(0).to_dict(orient="records")
+    return {
+        "data": merged_df.fillna(0).to_dict(orient="records"),
+        "load_errors": load_errors,
+    }
 
 async def load_inventory_from_storage():
     return (await storage.read_latest_domain_frame("inventory")).fillna(0).to_dict(orient="records")
@@ -419,12 +427,16 @@ async def get_all_recommendations():
         return {
             "count": 0,
             "results": [],
-            "errors": [{"error": inventory["error"]}],
+            "errors": [{"error": inventory["error"], "load_errors": inventory.get("load_errors", [])}],
         }
+    if isinstance(inventory, dict) and "data" in inventory:
+        inventory_rows = inventory["data"]
+    else:
+        inventory_rows = inventory
         
     results = []
     errors = []
-    for row in inventory:
+    for row in inventory_rows:
         try:
             # Map CSV fields to SKUInput with flexible header support
             def get_val(keys, default="0"):
@@ -478,7 +490,7 @@ async def get_all_recommendations():
     return {
         "count": len(results),
         "results": results,
-        "errors": errors[:50],
+        "errors": (errors[:50] + (inventory.get("load_errors", []) if isinstance(inventory, dict) else []))[:50],
     }
 
 @app.post("/recommendation", response_model=RecommendationResponse)
