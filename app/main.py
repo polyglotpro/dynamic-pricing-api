@@ -684,7 +684,7 @@ async def approve_strategy(data: Dict[str, Any]):
     except HTTPException:
         approvals = []
     approvals.insert(0, row)
-    await storage.write_json("data/metadata/approvals.json", approvals[:500])
+    await storage.write_json("data/metadata/approvals.json", approvals[:500], overwrite=True)
 
     return {"status": "success", "message": f"Strategy for {data.get('sku_id')} committed to ledger."}
 

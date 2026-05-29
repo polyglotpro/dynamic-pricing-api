@@ -57,7 +57,7 @@ class BlobStorage:
             )
         return BlobArtifact(path=blob_path, pathname=blob.pathname)
 
-    async def write_json(self, path: str, payload: Any) -> BlobArtifact:
+    async def write_json(self, path: str, payload: Any, *, overwrite: bool = False) -> BlobArtifact:
         self._require_token()
         body = json.dumps(payload, indent=2).encode("utf-8")
         async with AsyncBlobClient() as blob_client:
@@ -67,6 +67,7 @@ class BlobStorage:
                 access="private",
                 content_type="application/json",
                 add_random_suffix=False,
+                overwrite=overwrite,
             )
         return BlobArtifact(path=path, pathname=blob.pathname)
 
@@ -92,7 +93,7 @@ class BlobStorage:
         raise HTTPException(status_code=500, detail=f"Unsupported blob payload type for '{path}'")
 
     async def write_latest_manifest(self, payload: dict[str, Any]) -> BlobArtifact:
-        return await self.write_json(self._latest_manifest_path(), payload)
+        return await self.write_json(self._latest_manifest_path(), payload, overwrite=True)
 
     async def read_upload_history(self) -> list[dict[str, Any]]:
         try:
@@ -104,7 +105,7 @@ class BlobStorage:
         return payload if isinstance(payload, list) else []
 
     async def write_upload_history(self, history: list[dict[str, Any]]) -> BlobArtifact:
-        return await self.write_json(self._metadata_path("upload_history"), history[:50])
+        return await self.write_json(self._metadata_path("upload_history"), history[:50], overwrite=True)
 
     async def read_settings(self) -> dict[str, Any]:
         try:
@@ -114,7 +115,7 @@ class BlobStorage:
         return payload if isinstance(payload, dict) else {}
 
     async def write_settings(self, settings: dict[str, Any]) -> BlobArtifact:
-        return await self.write_json(self._settings_path(), settings)
+        return await self.write_json(self._settings_path(), settings, overwrite=True)
 
     async def read_latest_domain_frame(self, domain: str) -> pd.DataFrame:
         self._require_token()
