@@ -419,6 +419,7 @@ async def get_all_recommendations():
         return []
         
     results = []
+    errors = []
     for row in inventory:
         try:
             # Map CSV fields to SKUInput with flexible header support
@@ -464,9 +465,17 @@ async def get_all_recommendations():
                 a = advertising_agent(x, tags, trace)
                 results.append(orchestrate(x, tags, p, a, trace))
         except Exception as e:
-            print(f"Error processing {row.get('sku_id')}: {e}")
+            errors.append({
+                "sku_id": row.get("sku_id"),
+                "error": str(e),
+                "row_keys": sorted(list(row.keys()))[:40],
+            })
             continue
-    return results
+    return {
+        "count": len(results),
+        "results": results,
+        "errors": errors[:50],
+    }
 
 @app.post("/recommendation", response_model=RecommendationResponse)
 def recommendation(x: SKUInput):
