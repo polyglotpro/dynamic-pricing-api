@@ -106,10 +106,8 @@ class BlobStorage:
     async def read_settings(self) -> dict[str, Any]:
         try:
             payload = await self.read_json(self._settings_path())
-        except HTTPException as exc:
-            if exc.status_code == 404:
-                return {}
-            raise
+        except Exception:
+            return {}
         return payload if isinstance(payload, dict) else {}
 
     async def write_settings(self, settings: dict[str, Any]) -> BlobArtifact:

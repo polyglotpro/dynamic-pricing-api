@@ -17,9 +17,13 @@ storage = BlobStorage()
 
 @app.on_event("startup")
 async def load_persisted_settings():
-    persisted = await storage.read_settings()
-    if persisted:
-        CONFIG.update(persisted)
+    try:
+        persisted = await storage.read_settings()
+        if persisted:
+            CONFIG.update(persisted)
+    except Exception:
+        # Fail open on startup; endpoints can still serve with defaults.
+        pass
 
 # CORS:
 # - Local dev commonly runs Vite on :5173
