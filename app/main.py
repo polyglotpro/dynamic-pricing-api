@@ -770,6 +770,31 @@ async def debug_blob_get(name: str = "sample"):
 async def upload_catalog(file: UploadFile = File(...)):
     safe_filename = os.path.basename(file.filename or "uploaded_catalog.csv")
 
+    required_columns = [
+        "sku_id",
+        "product_name",
+        "product_type",
+        "hero_sku",
+        "current_price",
+        "cogs",
+        "competitor_price",
+        "mrp",
+        "stock_on_hand",
+        "days_of_cover",
+        "sell_through_weekly_pct",
+        "ageing_days",
+        "stockout_risk_pct",
+        "days_to_season_end",
+        "current_ad_spend_per_unit",
+        "roas",
+        "conversion_rate",
+        "ctr",
+        "cpc",
+        "last_30d_sales",
+        "avg_daily_sessions",
+        "conversion_benchmark",
+    ]
+
     try:
         content = await file.read()
         decoded_content = content.decode("utf-8-sig")
@@ -788,6 +813,17 @@ async def upload_catalog(file: UploadFile = File(...)):
 
         if rename_map:
             df = df.rename(columns=rename_map)
+
+        missing_required = [col for col in required_columns if col not in df.columns]
+        if missing_required:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "Invalid catalog schema.",
+                    "missing_required_columns": missing_required,
+                    "expected_columns": required_columns,
+                },
+            )
 
         if "conversion_rate" not in df.columns:
             def _conv_from_sku(s):
@@ -852,6 +888,7 @@ async def upload_catalog(file: UploadFile = File(...)):
 
         inventory_cols = [
             "sku_id",
+            "product_name",
             "stock_on_hand",
             "days_of_cover",
             "sell_through_weekly_pct",
