@@ -51,7 +51,7 @@ class BlobStorage:
             blob = await blob_client.put(
                 blob_path,
                 csv_bytes,
-                access="public",
+                access="private",
                 content_type="text/csv",
                 add_random_suffix=False,
             )
@@ -64,7 +64,7 @@ class BlobStorage:
             blob = await blob_client.put(
                 path,
                 body,
-                access="public",
+                access="private",
                 content_type="application/json",
                 add_random_suffix=False,
             )
