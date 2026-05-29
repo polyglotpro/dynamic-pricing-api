@@ -14,6 +14,8 @@ from vercel.blob import AsyncBlobClient
 class BlobArtifact:
     path: str
     pathname: str
+    url: Optional[str] = None
+    download_url: Optional[str] = None
 
 
 class BlobStorage:
@@ -59,7 +61,12 @@ class BlobStorage:
                 content_type="text/csv",
                 add_random_suffix=False,
             )
-        return BlobArtifact(path=blob_path, pathname=blob.pathname)
+        return BlobArtifact(
+            path=blob_path,
+            pathname=blob.pathname,
+            url=getattr(blob, "url", None),
+            download_url=getattr(blob, "download_url", None),
+        )
 
     async def write_debug_json(self, name: str, payload: Any) -> BlobArtifact:
         return await self.write_json(self._debug_path(name), payload, overwrite=True)
@@ -79,7 +86,12 @@ class BlobStorage:
                 add_random_suffix=False,
                 overwrite=overwrite,
             )
-        return BlobArtifact(path=path, pathname=blob.pathname)
+        return BlobArtifact(
+            path=path,
+            pathname=blob.pathname,
+            url=getattr(blob, "url", None),
+            download_url=getattr(blob, "download_url", None),
+        )
 
     async def read_json(self, path: str) -> Any:
         self._require_token()

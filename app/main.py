@@ -723,6 +723,8 @@ async def debug_blob_put(payload: Dict[str, Any]):
         "status": "ok",
         "name": name,
         "pathname": artifact.pathname,
+        "url": artifact.url,
+        "download_url": artifact.download_url,
         "value": value,
     }
 
